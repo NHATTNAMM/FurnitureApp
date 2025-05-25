@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "my_food_app",
+    "slug": "my_food_app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    //"icon": "./assets/images/furniturelogo.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      }
+    },
+    "web": {
+      "favicon": "./assets/images/favicon.png"
+    }
+  }
+}
