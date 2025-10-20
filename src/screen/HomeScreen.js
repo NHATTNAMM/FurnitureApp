@@ -12,7 +12,6 @@ import {
   Dimensions,
   Animated,
   Modal,
-  PanResponder,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import globalStyles from '../globals/globalStyles';
@@ -28,6 +27,10 @@ import FurnitureItem from './FurnitureItem';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { UserContext } from '../Firebase/UserContext';
 import AddFavorites from './Favorites/AddFavorites';
+import OutOfStockBadge from '../component/OutOfStockBadge';
+import PriceDisplay from '../component/PriceDisplay';
+import DiscountBadge from '../component/DiscountBadge';
+import GlassDiscountBadge from '../component/GlassDiscountBadge';
 
 const { width } = Dimensions.get('window');
 
@@ -59,22 +62,6 @@ const HomeScreen = () => {
     const [favoriteItems, setFavoriteItems] = useState([]);
     const scrollY = new Animated.Value(0);
     const [addressModalVisible, setAddressModalVisible] = useState(false);
-    const [fabPan] = useState(new Animated.ValueXY({ x: 0, y: 0 }));
-    const panResponder = React.useRef(
-      PanResponder.create({
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderGrant: () => {
-          fabPan.setOffset({ x: fabPan.x._value, y: fabPan.y._value });
-        },
-        onPanResponderMove: Animated.event(
-          [null, { dx: fabPan.x, dy: fabPan.y }],
-          { useNativeDriver: false }
-        ),
-        onPanResponderRelease: () => {
-          fabPan.flattenOffset();
-        },
-      })
-    ).current;
 
     const openModal = (furnitureItem) => {
       if (furnitureItem !== selectedFurniture){
@@ -284,12 +271,28 @@ const HomeScreen = () => {
                       style={styles.furnitureCard}
                       onPress={() => openModal(item)}
                     >
-                      <Image source={{ uri: item.image }} style={styles.furnitureImage} />
+                      <View style={{ position: 'relative' }}>
+                        <Image source={{ uri: item.image }} style={styles.furnitureImage} />
+                        <OutOfStockBadge quantity={item.quantity} />
+                        {/* Glass badge giảm giá góc trên bên phải */}
+                        {item.discountPercentage > 0 && (
+                          <View style={styles.discountBadgeContainer}>
+                            <GlassDiscountBadge 
+                              discountPercentage={item.discountPercentage} 
+                              size="small"
+                              glassIntensity="medium"
+                            />
+                          </View>
+                        )}
+                      </View>
                       <View style={styles.furnitureInfo}>
                         <Text style={styles.furnitureName}>{item.furnitureName}</Text>
-                        <Text style={styles.furniturePrice}>
-                          {Number(item.furniturePrice).toLocaleString('vi-VN')} đ
-                        </Text>
+                        <PriceDisplay 
+                          originalPrice={item.furniturePrice}
+                          discountPercentage={item.discountPercentage}
+                          fontSize={16}
+                          style={styles.priceContainer}
+                        />
                         <View style={styles.tagContainer}>
                           {Array.isArray(item.tag) && item.tag.map((tag, index) => (
                             <TouchableOpacity 
@@ -309,6 +312,7 @@ const HomeScreen = () => {
                             </TouchableOpacity>
                           ))}
                         </View>
+                        
                       </View>
                       <AddFavorites 
                         product={{
@@ -369,28 +373,7 @@ const HomeScreen = () => {
           </View>
         </Modal>
       </SafeAreaView>
-      {/* Nút giỏ hàng nổi (FAB) có thể kéo thả */}
-      <Animated.View
-        style={[
-          styles.fabCart,
-          { transform: fabPan.getTranslateTransform() }
-        ]}
-        {...panResponder.panHandlers}
-      >
-        <TouchableOpacity 
-          style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}
-          onPress={() => navigation.navigate('Cart')}
-          activeOpacity={0.8}
-        >
-          <MaterialIcons name="shopping-cart" size={28} color="#fff" />
-          {cartItems.length > 0 && (
-            <View style={styles.fabCartBadge}>
-              <Text style={styles.fabCartBadgeText}>{cartItems.length}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </Animated.View>
-      <BottomNavigation />
+      <BottomNavigation cartItemCount={cartItems.length} />
     </View>
   );
 };
@@ -561,6 +544,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 10,
   },
+  priceContainer: {
+    marginBottom: 10,
+  },
+  discountBadgeContainer: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    zIndex: 5,
+    // Add subtle backdrop for better glass effect
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
   tagContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -626,40 +621,6 @@ const styles = StyleSheet.create({
   addressModalCloseText: {
     color: '#fff',
     fontSize: 14,
-    fontWeight: 'bold',
-  },
-  fabCart: {
-    position: 'absolute',
-    bottom: 90,
-    right: 24,
-    backgroundColor: '#000D66',
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    zIndex: 100,
-  },
-  fabCartBadge: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    backgroundColor: '#ff5252',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-  },
-  fabCartBadgeText: {
-    color: '#fff',
-    fontSize: 12,
     fontWeight: 'bold',
   },
 });

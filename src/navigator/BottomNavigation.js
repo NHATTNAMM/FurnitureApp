@@ -7,10 +7,11 @@ import React from 'react'
 const tags = [
     { id: 'Home', name: 'Trang chủ', iconName: 'home-outline', iconSetName: 'home' },
     { id: 'Favorites', name: 'Yêu Thích', iconName: 'heart-outline', iconSetName: 'heart' },
+    { id: 'Cart', name: 'Giỏ hàng', iconName: 'bag-outline', iconSetName: 'bag' },
     { id: 'SearchScreen', name: 'Tìm kiếm', iconName: 'search-outline', iconSetName: 'search' },
     { id: 'Profile', name: 'Tôi', iconName: 'person-circle-outline', iconSetName: 'person-circle' },
   ];
-const BottomNavigation = () => {
+const BottomNavigation = ({ cartItemCount = 0 }) => {
     
     const navigation = useNavigation();
     const route = useRoute();
@@ -19,6 +20,8 @@ const BottomNavigation = () => {
     const renderTag = (item,index)=>{
         const isSelected = index === currentIndex ;
         const iconColor = isSelected ? '#000d66' : '#666';
+        const isCartTab = item.id === 'Cart';
+        
         return (
             <TouchableOpacity
             key={item.id}
@@ -28,11 +31,20 @@ const BottomNavigation = () => {
             }
             >
             <View style={[styles.tag ,isSelected ] }>
-            <Ionicons
-                name= {isSelected ? item.iconSetName : item.iconName}
-                size={26}
-                color={iconColor}
-            />
+                <View style={styles.iconContainer}>
+                    <Ionicons
+                        name= {isSelected ? item.iconSetName : item.iconName}
+                        size={26}
+                        color={iconColor}
+                    />
+                    {isCartTab && cartItemCount > 0 && (
+                        <View style={styles.badge}>
+                            <Text style={styles.badgeText}>
+                                {cartItemCount > 99 ? '99+' : cartItemCount}
+                            </Text>
+                        </View>
+                    )}
+                </View>
                 <Text style={[styles.text, isSelected && styles.selectedText]}>
                     {item.name}
                 </Text>
@@ -69,6 +81,30 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         paddingVertical: 5,
+      },
+      iconContainer: {
+        position: 'relative',
+        alignItems: 'center',
+        justifyContent: 'center',
+      },
+      badge: {
+        position: 'absolute',
+        top: -8,
+        right: -8,
+        backgroundColor: '#ff5252',
+        borderRadius: 10,
+        minWidth: 20,
+        height: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 4,
+        borderWidth: 2,
+        borderColor: '#fff',
+      },
+      badgeText: {
+        color: '#fff',
+        fontSize: 10,
+        fontWeight: 'bold',
       },
       text: {
         fontSize: 12,

@@ -17,6 +17,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import FurnitureItem from './FurnitureItem';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import Style from '../globals/style';
+import OutOfStockBadge from '../component/OutOfStockBadge';
 
 const SearchScreen = () => {
   const [searchResults, setSearchResults] = useState([]);
@@ -88,7 +89,10 @@ const SearchScreen = () => {
       style={styles.furnitureCard}
       onPress={() => openModal(item)}
     >
-      <Image source={{ uri: item.image }} style={styles.furnitureImage} />
+      <View style={{ position: 'relative' }}>
+        <Image source={{ uri: item.image }} style={styles.furnitureImage} />
+        <OutOfStockBadge quantity={item.quantity} />
+      </View>
       <View style={styles.furnitureInfo}>
         <Text style={styles.furnitureName}>{item.furnitureName}</Text>
         <Text style={styles.furniturePrice}>{Number(item.furniturePrice).toLocaleString('vi-VN')} đ</Text>
@@ -99,6 +103,7 @@ const SearchScreen = () => {
             </View>
           ))}
         </View>
+        
       </View>
     </TouchableOpacity>
   );
@@ -107,8 +112,10 @@ const SearchScreen = () => {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         <View style={styles.searchContainer}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={Style.colors.cam} />
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <View style={styles.iconBack}>
+              <Ionicons name="arrow-back" size={22} color="#000D66" />
+            </View>
           </TouchableOpacity>
           <View style={styles.searchBar}>
             <Ionicons name="search" size={20} color="#888" style={styles.searchIcon} />
@@ -183,10 +190,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#fff',
-    padding: 10,
-    elevation: 2,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
   },
-  backButton: {
+  iconBack: {
+    borderWidth: 1,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
     marginRight: 10,
   },
   searchBar: {

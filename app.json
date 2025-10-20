@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "my_food_app",
-    "slug": "my_food_app",
+    "name": "furniture_app",
+    "slug": "furniture_app",
     "version": "1.0.0",
     "orientation": "portrait",
-    //"icon": "./assets/images/furniturelogo.png",
+    "icon": "./assets/images/furniturelogo.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "ios": {

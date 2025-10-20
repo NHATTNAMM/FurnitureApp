@@ -89,15 +89,15 @@ const Favorites = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.headerRow}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={28} color="#000d66" />
+      <View style={styles.headerNav}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <View style={styles.iconBack}>
+            <Ionicons name="arrow-back" size={22} color="#000D66" />
+          </View>
         </TouchableOpacity>
-        <View style={styles.headerTextContainer}>
-          <Text style={styles.headerTitle}>Danh sách yêu thích</Text>
-          <Text style={styles.headerSubtitle}>{favorites.length} sản phẩm</Text>
-        </View>
+        <Text style={styles.headerTitle}>Yêu thích</Text>
       </View>
+      <Text style={styles.itemCount}>{favorites.length} sản phẩm</Text>
       <FlatList
         data={favorites}
         renderItem={renderFavoriteItem}
@@ -151,31 +151,41 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  headerRow: {
+  headerNav: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 8,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 10,
     backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
   },
-  backButton: {
-    marginRight: 12,
-    padding: 4,
-    borderRadius: 20,
-  },
-  headerTextContainer: {
-    flex: 1,
+  iconBack: {
+    borderWidth: 1,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#000d66',
-    marginBottom: 4,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#000D66',
+    flex: 1,
+    textAlign: 'center',
+    marginRight: 50,
   },
-  headerSubtitle: {
+  itemCount: {
     fontSize: 14,
     color: '#666',
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 5,
+    backgroundColor: '#fff',
   },
   listContainer: {
     paddingBottom: 16,

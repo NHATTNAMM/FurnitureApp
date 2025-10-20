@@ -27,6 +27,7 @@ import Order from '../screen/Cart/Order';
 import HomeShipper from '../Shipper/HomeShipper';
 import SearchScreen from '../screen/SearchScreen';
 import BestSellingProducts from '../screen/BestSellingProducts';
+import MyReviewsScreen from '../screen/MyReviewsScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -65,6 +66,7 @@ const ScreensNavigation = () => {
         <Stack.Screen name="CompletedOrders" component={CompletedOrders} options={{ title: 'Đã đặt' }} />
         <Stack.Screen name="InProgressOrders" component={InProgressOrders} options={{ title: 'Đang giao' }} />
         <Stack.Screen name="Order" component={Order} options={{ title: 'Trạng thái đơn hàng' }} />
+        <Stack.Screen name="MyReviews" component={MyReviewsScreen} options={{ title: 'Đánh giá của tôi' }} />
         <Stack.Screen name="HomeShipper" component={HomeShipper} options={{ title: 'Nhận đơn hàng' }} />
         <Stack.Screen 
           name="BestSellingProducts" 

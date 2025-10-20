@@ -148,28 +148,135 @@ export const removeFurniture  = async (furnitureId) => {
     }
 }
 
+export const updateFurnitureDiscount = async (furnitureId, discountPercentage) => {
+    if (!furnitureId) {
+        return { success: false, error: "Thiếu id sản phẩm" };
+    }
+    
+    const discount = parseFloat(discountPercentage) || 0;
+    if (discount < 0 || discount > 100) {
+        return { success: false, error: "Phần trăm giảm giá phải từ 0 đến 100" };
+    }
+    
+    try {
+        const furnitureReference = doc(db, "furnitures", furnitureId);
+        const updateData = {};
+        
+        if (discount > 0) {
+            updateData.discountPercentage = discount;
+        } else {
+            // Nếu discount = 0, xóa field discountPercentage
+            updateData.discountPercentage = null;
+        }
+        
+        await updateDoc(furnitureReference, updateData);
+        return { success: true, message: "Đã cập nhật giảm giá sản phẩm" };
+    } catch (error) {
+        console.error("Cập nhật giảm giá thất bại:", error.message);
+        return { success: false, error: "Không thể cập nhật giảm giá. Vui lòng thử lại!" };
+    }
+};
+
+export const updateFurnitureQuantity = async (furnitureId, newQuantity) => {
+    if (!furnitureId) {
+        return { success: false, error: "Thiếu id sản phẩm" };
+    }
+    if (newQuantity < 0) {
+        return { success: false, error: "Số lượng không thể âm" };
+    }
+    try {
+        const furnitureReference = doc(db, "furnitures", furnitureId);
+        await updateDoc(furnitureReference, {
+            quantity: newQuantity
+        });
+        return { success: true, message: "Đã cập nhật số lượng tồn kho" };
+    } catch (error) {
+        console.error("Cập nhật số lượng thất bại:", error.message);
+        return { success: false, error: "Không thể cập nhật số lượng. Vui lòng thử lại!" };
+    }
+}
+
+// Helper function để tăng số lượng tồn kho cho các sản phẩm trong đơn hàng
+const restoreInventoryFromOrder = async (orderItems, batch) => {
+    const restoredItems = [];
+    for (const item of orderItems) {
+        if (item.furnitureItem && item.furnitureItem.furnitureId && item.soLuong) {
+            const furnitureRef = doc(db, "furnitures", item.furnitureItem.furnitureId);
+            const furnitureDoc = await getDoc(furnitureRef);
+            
+            if (furnitureDoc.exists()) {
+                const furnitureData = furnitureDoc.data();
+                const currentStock = furnitureData.quantity || 0;
+                
+                // Tăng số lượng tồn kho
+                batch.update(furnitureRef, {
+                    quantity: currentStock + item.soLuong
+                });
+                
+                restoredItems.push({
+                    furnitureName: item.furnitureItem.furnitureName,
+                    quantity: item.soLuong,
+                    newStock: currentStock + item.soLuong
+                });
+            }
+        }
+    }
+    return restoredItems;
+};
+
+// Hàm tính giá sau khi giảm
+export const calculateDiscountedPrice = (originalPrice, discountPercentage) => {
+    if (!discountPercentage || discountPercentage <= 0) {
+        return originalPrice;
+    }
+    return originalPrice * (1 - discountPercentage / 100);
+};
+
 export const addToCart = async (userId, { furnitureItem, soLuong, tongGia }) => {
     try {
+        // Kiểm tra số lượng tồn kho
+        const furnitureRef = doc(db, "furnitures", furnitureItem.furnitureId);
+        const furnitureDoc = await getDoc(furnitureRef);
+        
+        if (!furnitureDoc.exists()) {
+            return { success: false, message: "Sản phẩm không tồn tại!" };
+        }
+        
+        const furnitureData = furnitureDoc.data();
+        const currentStock = furnitureData.quantity || 0;
+        
+        if (currentStock < soLuong) {
+            return { success: false, message: `Chỉ còn ${currentStock} sản phẩm trong kho!` };
+        }
+        
         const userReference = doc(db, "User", userId);
         const userDoc = await getDoc(userReference);
         if (userDoc.exists()) {
             const userData = userDoc.data();
             const cart = userData.cart || [];
             let found = false;
+            
+            // Tính giá cuối cùng (đã giảm nếu có)
+            const finalPrice = calculateDiscountedPrice(furnitureItem.furniturePrice, furnitureItem.discountPercentage);
+            
             for (let i = 0; i < cart.length; i++) {
                 const cartItem = cart[i];
                 const id1 = cartItem.furnitureItem?.furnitureId;
                 const id2 = furnitureItem?.furnitureId;
                 if (id1 && id2 && id1 === id2) {
-                    cart[i].soLuong += soLuong;
-                    cart[i].tongGia += tongGia;
+                    const newQuantity = cart[i].soLuong + soLuong;
+                    if (newQuantity > currentStock) {
+                        return { success: false, message: `Chỉ còn ${currentStock} sản phẩm trong kho!` };
+                    }
+                    cart[i].soLuong = newQuantity;
+                    cart[i].tongGia = newQuantity * finalPrice;
                     found = true;
                     break;
                 }
             }
             if (!found) {
                 if (furnitureItem) {
-                    cart.push({ furnitureItem, soLuong, tongGia });
+                    cart.push({ furnitureItem, soLuong, tongGia: soLuong * finalPrice });
                 }
             }
             await updateDoc(userReference, {
@@ -312,6 +419,30 @@ export const checkoutOrders = async (userId, ordersToCheckout) => {
                 return { success: false, message: "Vui lòng cập nhật địa chỉ trước khi thanh toán!" };
             }
 
+            // Kiểm tra tồn kho trước khi thanh toán
+            const batch = writeBatch(db);
+            
+            for (const item of ordersToCheckout[0].items) {
+                const furnitureRef = doc(db, "furnitures", item.furnitureItem.furnitureId);
+                const furnitureDoc = await getDoc(furnitureRef);
+                
+                if (!furnitureDoc.exists()) {
+                    return { success: false, message: `Sản phẩm ${item.furnitureItem.furnitureName} không tồn tại!` };
+                }
+                
+                const furnitureData = furnitureDoc.data();
+                const currentStock = furnitureData.quantity || 0;
+                
+                if (currentStock < item.soLuong) {
+                    return { success: false, message: `Sản phẩm ${item.furnitureItem.furnitureName} chỉ còn ${currentStock} trong kho!` };
+                }
+                
+                // Giảm số lượng tồn kho
+                batch.update(furnitureRef, {
+                    quantity: currentStock - item.soLuong
+                });
+            }
+
             // Tạo một đơn hàng mới với tất cả các món
             const newOrder = {
                 items: ordersToCheckout[0].items.map(item => ({
@@ -332,12 +463,15 @@ export const checkoutOrders = async (userId, ordersToCheckout) => {
 
             // Lưu đơn hàng vào collection "orders"
             const orderRef = doc(collection(db, "orders"));
-            await setDoc(orderRef, newOrder);
+            batch.set(orderRef, newOrder);
 
             // Xóa giỏ hàng của người dùng
-            await updateDoc(userReference, {
+            batch.update(userReference, {
                 cart: [], // Đặt giỏ hàng thành rỗng
             });
+
+            // Thực hiện tất cả các thay đổi
+            await batch.commit();
 
             return { success: true, message: "Thanh toán thành công và chuyển sang trạng thái Chờ giao hàng!" };
         } else {
@@ -531,12 +665,36 @@ export const updateOrderStatus = async (orderId, newStatus) => {
             return { success: false, message: "Không tìm thấy đơn hàng!" };
         }
 
-        await updateDoc(orderRef, {
+        const orderData = orderDoc.data();
+        const batch = writeBatch(db);
+
+        // Cập nhật trạng thái đơn hàng
+        batch.update(orderRef, {
             status: newStatus,
             updatedAt: new Date()
         });
 
-        return { success: true, message: "Cập nhật trạng thái đơn hàng thành công!" };
+        // Nếu trạng thái mới là "Đã hủy" và trạng thái cũ không phải "Đã hủy"
+        // thì cần tăng số lượng tồn kho trở lại
+        let restoredItems = [];
+        if (newStatus === "Đã hủy" && orderData.status !== "Đã hủy") {
+            if (orderData.items && Array.isArray(orderData.items)) {
+                restoredItems = await restoreInventoryFromOrder(orderData.items, batch);
+            }
+        }
+
+        // Thực hiện tất cả các thay đổi
+        await batch.commit();
+
+        let message = "Cập nhật trạng thái đơn hàng thành công!";
+        if (newStatus === "Đã hủy" && orderData.status !== "Đã hủy") {
+            const restoredCount = restoredItems.length;
+            message = restoredCount > 0 
+                ? `Cập nhật trạng thái đơn hàng thành công! Đã hoàn trả ${restoredCount} sản phẩm vào kho.`
+                : "Cập nhật trạng thái đơn hàng thành công!";
+        }
+
+        return { success: true, message };
     } catch (error) {
         console.error("Lỗi khi cập nhật trạng thái đơn hàng:", error);
         return { success: false, message: "Lỗi khi cập nhật trạng thái đơn hàng!" };
@@ -577,12 +735,30 @@ export const cancelOrder = async (orderId) => {
             return { success: false, message: "Chỉ có thể hủy đơn hàng trong trạng thái Chờ giao hàng!" };
         }
 
-        await updateDoc(orderRef, {
+        // Tăng số lượng tồn kho trở lại khi hủy đơn hàng
+        const batch = writeBatch(db);
+        
+        // Cập nhật trạng thái đơn hàng
+        batch.update(orderRef, {
             status: "Đã hủy",
             updatedAt: new Date()
         });
 
-        return { success: true, message: "Hủy đơn hàng thành công!" };
+        // Tăng số lượng tồn kho cho từng sản phẩm trong đơn hàng
+        let restoredItems = [];
+        if (orderData.items && Array.isArray(orderData.items)) {
+            restoredItems = await restoreInventoryFromOrder(orderData.items, batch);
+        }
+
+        // Thực hiện tất cả các thay đổi
+        await batch.commit();
+
+        const restoredCount = restoredItems.length;
+        const message = restoredCount > 0 
+            ? `Hủy đơn hàng thành công! Đã hoàn trả ${restoredCount} sản phẩm vào kho.`
+            : "Hủy đơn hàng thành công!";
+
+        return { success: true, message };
     } catch (error) {
         console.error("Lỗi khi hủy đơn hàng:", error);
         return { success: false, message: "Lỗi khi hủy đơn hàng!" };
@@ -624,5 +800,153 @@ export const addToFavoritesFurniture = async (userId, furnitureId) => {
     } catch (error) {
         console.error("Lỗi khi thêm vào danh sách yêu thích:", error);
         return { success: false, message: "Lỗi khi thêm vào danh sách yêu thích!" };
+    }
+}
+
+// Update quantity of an item in cart
+export const updateCartQuantity = async (userId, furnitureId, newQuantity) => {
+    try {
+        if (!userId || !furnitureId) {
+            return { success: false, message: "Thiếu thông tin người dùng hoặc sản phẩm" };
+        }
+
+        if (newQuantity < 1) {
+            return { success: false, message: "Số lượng phải lớn hơn 0" };
+        }
+
+        // Kiểm tra tồn kho
+        const furnitureRef = doc(db, "furnitures", furnitureId);
+        const furnitureDoc = await getDoc(furnitureRef);
+        
+        if (!furnitureDoc.exists()) {
+            return { success: false, message: "Sản phẩm không tồn tại!" };
+        }
+        
+        const furnitureData = furnitureDoc.data();
+        const currentStock = furnitureData.quantity || 0;
+        
+        if (currentStock < newQuantity) {
+            return { success: false, message: `Chỉ còn ${currentStock} sản phẩm trong kho!` };
+        }
+
+        const userRef = doc(db, "User", userId);
+        const userDoc = await getDoc(userRef);
+
+        if (userDoc.exists()) {
+            const userData = userDoc.data();
+            const cart = userData.cart || [];
+
+            // Tìm sản phẩm trong giỏ hàng
+            const itemIndex = cart.findIndex(item => 
+                item.furnitureItem?.furnitureId === furnitureId
+            );
+
+            if (itemIndex === -1) {
+                return { success: false, message: "Không tìm thấy sản phẩm trong giỏ hàng" };
+            }
+
+            // Tính giá cuối cùng (đã giảm nếu có)
+            const finalPrice = calculateDiscountedPrice(
+                cart[itemIndex].furnitureItem.furniturePrice,
+                cart[itemIndex].furnitureItem.discountPercentage
+            );
+
+            // Cập nhật số lượng và tổng giá
+            cart[itemIndex].soLuong = newQuantity;
+            cart[itemIndex].tongGia = newQuantity * finalPrice;
+
+            await updateDoc(userRef, { cart });
+            return { success: true, message: "Đã cập nhật số lượng" };
+        } else {
+            return { success: false, message: "Không tìm thấy người dùng" };
+        }
+    } catch (error) {
+        console.error("Lỗi khi cập nhật số lượng giỏ hàng:", error);
+        return { success: false, message: "Lỗi khi cập nhật số lượng!" };
+    }
+}
+
+// Remove an item from cart
+export const removeFromCart = async (userId, furnitureId) => {
+    try {
+        if (!userId || !furnitureId) {
+            return { success: false, message: "Thiếu thông tin người dùng hoặc sản phẩm" };
+        }
+
+        const userRef = doc(db, "User", userId);
+        const userDoc = await getDoc(userRef);
+
+        if (userDoc.exists()) {
+            const userData = userDoc.data();
+            const cart = userData.cart || [];
+
+            // Lọc bỏ sản phẩm cần xóa
+            const updatedCart = cart.filter(item => 
+                item.furnitureItem?.furnitureId !== furnitureId
+            );
+
+            if (updatedCart.length === cart.length) {
+                return { success: false, message: "Không tìm thấy sản phẩm trong giỏ hàng" };
+            }
+
+            await updateDoc(userRef, { cart: updatedCart });
+            return { success: true, message: "Đã xóa sản phẩm khỏi giỏ hàng" };
+        } else {
+            return { success: false, message: "Không tìm thấy người dùng" };
+        }
+    } catch (error) {
+        console.error("Lỗi khi xóa sản phẩm khỏi giỏ hàng:", error);
+        return { success: false, message: "Lỗi khi xóa sản phẩm khỏi giỏ hàng!" };
+    }
+}
+
+// Function to get review statistics for a furniture item
+export const getReviewStats = async (furnitureId) => {
+    try {
+        if (!furnitureId) {
+            return { success: false, error: "Thiếu ID sản phẩm" };
+        }
+
+        const reviewsRef = collection(db, 'reviews');
+        const q = query(reviewsRef, where('furnitureId', '==', furnitureId));
+        const querySnapshot = await getDocs(q);
+
+        const reviews = [];
+        const ratings = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };
+        let totalRating = 0;
+
+        querySnapshot.forEach((doc) => {
+            const reviewData = { id: doc.id, ...doc.data() };
+            reviews.push(reviewData);
+            
+            const rating = reviewData.rating;
+            if (rating >= 1 && rating <= 5) {
+                ratings[rating.toString()]++;
+                totalRating += rating;
+            }
+        });
+
+        const totalReviews = reviews.length;
+        const averageRating = totalReviews > 0 ? totalRating / totalReviews : 0;
+
+        return {
+            success: true,
+            data: {
+                reviews,
+                totalReviews,
+                averageRating: Math.round(averageRating * 10) / 10, // Làm tròn 1 chữ số thập phân
+                ratings,
+                distribution: {
+                    5: ratings['5'],
+                    4: ratings['4'],
+                    3: ratings['3'],
+                    2: ratings['2'],
+                    1: ratings['1']
+                }
+            }
+        };
+    } catch (error) {
+        console.error("Lỗi khi lấy thống kê review:", error);
+        return { success: false, error: error.message };
     }
 }

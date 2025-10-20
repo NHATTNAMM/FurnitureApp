@@ -1,6 +1,6 @@
 import { Alert, FlatList, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native'
 import React, { useEffect, useState } from 'react'
-import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, Feather, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { collection, getDocs, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../Firebase/FirebaseConfig';
 
@@ -57,18 +57,24 @@ const UserScreen = () => {
         return (
             <View style={styles.itemContainer}>
                 <MaterialCommunityIcons name="account-circle" size={44} color="#000d66" style={{ marginRight: 14 }} />
-                <View style={{ flex: 1 }}>
-                    <Text style={styles.itemTitle}>{item.fullName || 'Chưa có tên'}</Text>
-                    <Text style={styles.itemEmail}>{item.email}</Text>
-                    <Text style={styles.itemPhone}>{item.phone || 'Chưa có số điện thoại'}</Text>
+                <View style={{ flex: 1, paddingRight: 100 }}>
+                    <Text style={styles.itemTitle} numberOfLines={1}>{item.fullName || 'Chưa có tên'}</Text>
+                    <Text style={styles.itemEmail} numberOfLines={1} ellipsizeMode="tail">{item.email}</Text>
+                    <Text style={styles.itemPhone} numberOfLines={1}>{item.phone || 'Chưa có số điện thoại'}</Text>
                 </View>
                 <View style={styles.icon}>
-                    <Feather name="edit" size={24} color="#000d66"
-                        style={{ marginRight: 10 }}
+                    <TouchableOpacity 
+                        style={[styles.editButton, { marginRight: 10 }]}
                         onPress={() => Alert.alert('Thông tin người dùng:', `Tên: ${item.fullName}\nEmail: ${item.email}\nSĐT: ${item.phone || 'Chưa có'}\nĐịa chỉ: ${item.address || 'Chưa có'}\nVai trò: ${item.role || 'user'}`)}
-                    />
-                    <Feather name="trash-2" size={24} color="#ff4444"
-                        onPress={() => deleteUser(item.id, item.fullName)} />
+                    >
+                        <Feather name="edit" size={22} color="#000d66" />
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                        style={styles.deleteButton}
+                        onPress={() => deleteUser(item.id, item.fullName)}
+                    >
+                        <MaterialIcons name="delete-outline" size={22} color="#E53935" />
+                    </TouchableOpacity>
                 </View>
             </View>
         )
@@ -227,6 +233,26 @@ const styles = StyleSheet.create({
         right: 10,
         flexDirection: 'row',
         marginRight: 10,
+        alignItems: 'center',
+    },
+    editButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        backgroundColor: '#F3F4F6',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    deleteButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#FFCDD2',
+        backgroundColor: '#FFEBEE',
+        justifyContent: 'center',
         alignItems: 'center',
     },
     emptyContainer: {

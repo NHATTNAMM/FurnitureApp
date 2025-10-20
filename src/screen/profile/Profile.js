@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View, Image, ScrollView, TouchableOpacity, Alert } from 'react-native'
+import { StyleSheet, Text, View, Image, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native'
 import { MaterialCommunityIcons, Ionicons, MaterialIcons, AntDesign, FontAwesome } from '@expo/vector-icons';
 import React, { useContext, useState } from 'react'
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,7 +13,8 @@ const PRIMARY = '#000D66';
 const SECONDARY = '#F3F4F6';
 
 const Profile = () => {
-    const { user } = useContext(UserContext)
+    const { user, refreshUserStats } = useContext(UserContext)
+    const [isLoadingStats, setIsLoadingStats] = useState(false);
 
     if (!user) {
         return (
@@ -25,6 +26,21 @@ const Profile = () => {
     const [avatar, setAvatar] = useState(user?.avatar || '');
     const [role, setRole] = useState(user?.role || '')
     const navigation = useNavigation();
+    
+    // Debug user stats
+    React.useEffect(() => {
+        if (user) {
+            console.log('Profile User Stats:', {
+                totalOrders: user.totalOrders,
+                completedOrders: user.completedOrders, 
+                totalSpent: user.totalSpent,
+                totalReviews: user.totalReviews,
+                totalProductsToReview: user.totalProductsToReview,
+                pendingReviews: user.pendingReviews,
+                rating: user.rating
+            });
+        }
+    }, [user]);
     const handleLogOut = async () => {
         Alert.alert('Thông báo', "Bạn có muốn đăng xuất", [
             { text: "Hủy", style: "cancel" },
@@ -44,6 +60,17 @@ const Profile = () => {
             }
         ])
     }
+    const handleRefreshStats = async () => {
+        setIsLoadingStats(true);
+        try {
+            await refreshUserStats();
+        } catch (error) {
+            console.error('Lỗi refresh stats:', error);
+        } finally {
+            setIsLoadingStats(false);
+        }
+    };
+    
     const handleChangeAvatar = async () => {
         try {
             // Yêu cầu quyền truy cập thư viện ảnh
@@ -84,7 +111,15 @@ const Profile = () => {
                             </View>
                         </TouchableOpacity>
                         <Text style={styles.headerTitle}>Hồ sơ cá nhân</Text>
-                        <View style={{ width: 40 }} />
+                        <TouchableOpacity onPress={handleRefreshStats} disabled={isLoadingStats}>
+                            <View style={[styles.iconBack, isLoadingStats && { opacity: 0.5 }]}>
+                                {isLoadingStats ? (
+                                    <ActivityIndicator size={18} color={PRIMARY} />
+                                ) : (
+                                    <MaterialIcons name="refresh" size={22} color={PRIMARY} />
+                                )}
+                            </View>
+                        </TouchableOpacity>
                     </View>
                     <View style={styles.container}>
                         <View style={styles.avatarContainer}>
@@ -105,21 +140,103 @@ const Profile = () => {
                             <Text style={styles.address}>{user.address}</Text>
                         </View>
                         <View style={styles.statsRow}>
-                            <View style={styles.statBox}>
-                                <MaterialIcons name="shopping-cart" size={28} color={PRIMARY} />
+                            <TouchableOpacity 
+                                style={styles.statBox}
+                                onPress={() => navigation.navigate('Order')}
+                                activeOpacity={0.7}
+                            >
+                                <MaterialIcons name="receipt" size={28} color={PRIMARY} />
+                                <Text style={styles.statLabel}>Tổng đơn</Text>
+                                {isLoadingStats ? (
+                                    <ActivityIndicator size="small" color={PRIMARY} style={{ marginVertical: 8 }} />
+                                ) : (
+                                    <>
+                                        <Text style={[styles.statValue, { color: PRIMARY, fontWeight: 'bold' }]}>
+                                            {user.totalOrders || 0}
+                                        </Text>
+                                        <Text style={styles.statSubText}>Tất cả đơn hàng</Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={styles.statBox}
+                                onPress={() => navigation.navigate('Order', { initialStatus: 'Đã đặt' })}
+                                activeOpacity={0.7}
+                            >
+                                <MaterialIcons name="shopping-cart" size={28} color="#2196F3" />
                                 <Text style={styles.statLabel}>Đơn đã đặt</Text>
-                                <Text style={styles.statValue}>{user.totalOrders || 0}</Text>
-                            </View>
-                            <View style={styles.statBox}>
-                                <MaterialIcons name="attach-money" size={28} color={PRIMARY} />
+                                {isLoadingStats ? (
+                                    <ActivityIndicator size="small" color="#2196F3" style={{ marginVertical: 8 }} />
+                                ) : (
+                                    <>
+                                        <Text style={[styles.statValue, { color: '#2196F3', fontWeight: 'bold' }]}>
+                                            {user.completedOrders || 0}
+                                        </Text>
+                                        <Text style={styles.statSubText}>Đơn hoàn thành</Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                        <View style={styles.statsRow}>
+                            <TouchableOpacity 
+                                style={styles.statBox}
+                                onPress={() => navigation.navigate('Order', { initialStatus: 'Đã đặt' })}
+                                activeOpacity={0.7}
+                            >
+                                <MaterialIcons name="attach-money" size={28} color="#4CAF50" />
                                 <Text style={styles.statLabel}>Đã chi tiêu</Text>
-                                <Text style={styles.statValue}>{user.totalSpent ? user.totalSpent.toLocaleString('vi-VN') + ' đ' : '0 đ'}</Text>
-                            </View>
-                            <View style={styles.statBox}>
-                                <MaterialIcons name="star" size={28} color={PRIMARY} />
+                                {isLoadingStats ? (
+                                    <ActivityIndicator size="small" color="#4CAF50" style={{ marginVertical: 8 }} />
+                                ) : (
+                                    <>
+                                        <Text style={[styles.statValue, { color: '#4CAF50', fontWeight: 'bold' }]}>
+                                            {user.totalSpent ? user.totalSpent.toLocaleString('vi-VN') + ' đ' : '0 đ'}
+                                        </Text>
+                                        <Text style={styles.statSubText}>Từ đơn hoàn thành</Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={styles.statBox}
+                                onPress={() => {
+                                    if (user.pendingReviews > 0) {
+                                        // Nếu có đánh giá chưa hoàn thành, điều hướng đến đơn đã đặt để đánh giá
+                                        navigation.navigate('Order', { initialStatus: 'Đã đặt' });
+                                    } else {
+                                        // Nếu đã đánh giá hết, điều hướng đến xem đánh giá của tôi
+                                        navigation.navigate('MyReviews');
+                                    }
+                                }}
+                                activeOpacity={0.7}
+                            >
+                                <View style={{ position: 'relative' }}>
+                                    <MaterialIcons 
+                                        name={user.pendingReviews > 0 ? "rate-review" : "reviews"} 
+                                        size={28} 
+                                        color="#FF9800" 
+                                    />
+                                    {user.pendingReviews > 0 && (
+                                        <View style={styles.pendingBadge}>
+                                            <Text style={styles.pendingBadgeText}>
+                                                {user.pendingReviews}
+                                            </Text>
+                                        </View>
+                                    )}
+                                </View>
                                 <Text style={styles.statLabel}>Đánh giá</Text>
-                                <Text style={styles.statValue}>{user.rating ? user.rating.toFixed(1) + '/5' : 'Chưa có'}</Text>
-                            </View>
+                                {isLoadingStats ? (
+                                    <ActivityIndicator size="small" color="#FF9800" style={{ marginVertical: 8 }} />
+                                ) : (
+                                    <>
+                                        <Text style={[styles.statValue, { color: '#FF9800', fontWeight: 'bold' }]}>
+                                            {user.pendingReviews || 0}/{user.totalProductsToReview || 0}
+                                        </Text>
+                                        <Text style={styles.statSubText}>
+                                            {user.pendingReviews > 0 ? 'Chưa đánh giá' : 'Hoàn thành'}
+                                        </Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
                         </View>
                         <View style={styles.profileDetailList}>
                             <ProfileItem
@@ -131,6 +248,16 @@ const Profile = () => {
                                 icon={<FontAwesome name="shopping-cart" size={24} color={PRIMARY} />}
                                 label="Đơn hàng"
                                 onPress={() => navigation.navigate('Order')}
+                            />
+                            <ProfileItem
+                                icon={<MaterialIcons name="rate-review" size={24} color={PRIMARY} />}
+                                label="Đánh giá sản phẩm"
+                                onPress={() => navigation.navigate('Order', { initialStatus: 'Đã đặt' })}
+                            />
+                            <ProfileItem
+                                icon={<MaterialIcons name="reviews" size={24} color={PRIMARY} />}
+                                label="Đánh giá của tôi"
+                                onPress={() => navigation.navigate('MyReviews')}
                             />
                             <ProfileItem
                                 icon={<AntDesign name="heart" size={22} color={PRIMARY} />}
@@ -253,8 +380,8 @@ const styles = StyleSheet.create({
     statsRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        marginTop: 20,
-        marginBottom: 10,
+        marginTop: 15,
+        marginBottom: 5,
         width: '100%',
         paddingHorizontal: 10,
     },
@@ -285,10 +412,16 @@ const styles = StyleSheet.create({
         fontSize: 16,
         marginTop: 2,
     },
+    statSubText: {
+        color: '#9CA3AF',
+        fontSize: 12,
+        marginTop: 2,
+        textAlign: 'center',
+    },
     profileDetailList: {
         flex: 1,
         width: '100%',
-        marginTop: 20,
+        marginTop: 25,
     },
     profileItemTouchable: {
         marginBottom: 10,
@@ -319,6 +452,23 @@ const styles = StyleSheet.create({
     },
     iconLeft: {
         marginLeft: 10,
+    },
+    pendingBadge: {
+        position: 'absolute',
+        top: -5,
+        right: -5,
+        backgroundColor: '#E53935',
+        borderRadius: 10,
+        minWidth: 18,
+        height: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 4,
+    },
+    pendingBadgeText: {
+        color: '#fff',
+        fontSize: 10,
+        fontWeight: 'bold',
     },
 });
 

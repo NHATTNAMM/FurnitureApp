@@ -6,6 +6,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useRoute } from '@react-navigation/native';
+import InventoryRestoreNotification from '../../component/InventoryRestoreNotification';
+import WriteReview from '../../component/WriteReview';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { db } from '../../Firebase/FirebaseConfig';
 
 const PRIMARY = '#000D66';
 const SECONDARY = '#F3F4F6';
@@ -16,6 +20,13 @@ const Order = ({ navigation }) => {
   const [orders, setOrders] = useState([]);
   const [selectedStatus, setSelectedStatus] = useState(route.params?.initialStatus || 'Chờ giao hàng');
   const statusList = ['Chờ giao hàng', 'Đang giao', 'Đã đặt', 'Đã hủy'];
+  const [notification, setNotification] = useState({
+    visible: false,
+    message: ''
+  });
+  const [reviewModalVisible, setReviewModalVisible] = useState(false);
+  const [selectedReviewItem, setSelectedReviewItem] = useState(null); // { furnitureId, furnitureName }
+  const [reviewedFurnitureIds, setReviewedFurnitureIds] = useState(new Set());
 
   useEffect(() => {
     if (user && user.id) {
@@ -27,6 +38,26 @@ const Order = ({ navigation }) => {
       return () => unsubscribe();
     }
   }, [user]);
+
+  // Subscribe to user's reviews to know which products were already reviewed
+  useEffect(() => {
+    if (!user?.id) return;
+    const q = query(
+      collection(db, 'reviews'),
+      where('userId', '==', user.id)
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const nextSet = new Set();
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        if (data?.furnitureId) {
+          nextSet.add(String(data.furnitureId));
+        }
+      });
+      setReviewedFurnitureIds(nextSet);
+    });
+    return () => unsubscribe();
+  }, [user?.id]);
 
   useEffect(() => {
     if (route.params?.initialStatus) {
@@ -47,14 +78,42 @@ const Order = ({ navigation }) => {
           text: "Có",
           onPress: async () => {
             const result = await cancelOrder(orderId);
-            Alert.alert(
-              result.success ? "Thành công" : "Lỗi",
-              result.message
-            );
+            if (result.success) {
+              setNotification({
+                visible: true,
+                message: result.message
+              });
+              // Tự động ẩn thông báo sau 5 giây
+              setTimeout(() => {
+                setNotification({ visible: false, message: '' });
+              }, 5000);
+            } else {
+              Alert.alert("Lỗi", result.message);
+            }
           }
         }
       ]
     );
+  };
+
+  const closeNotification = () => {
+    setNotification({ visible: false, message: '' });
+  };
+
+  const openReviewModal = (furniture) => {
+    const furnitureIdRaw = furniture.furnitureItem?.id || furniture.furnitureItem?.furnitureId || furniture.furnitureItem?.docId;
+    const furnitureId = furnitureIdRaw ? String(furnitureIdRaw) : undefined;
+    const furnitureName = furniture.furnitureItem?.furnitureName || 'Sản phẩm';
+    if (furnitureId && reviewedFurnitureIds.has(furnitureId)) {
+      return;
+    }
+    setSelectedReviewItem({ furnitureId, furnitureName });
+    setReviewModalVisible(true);
+  };
+
+  const closeReviewModal = () => {
+    setReviewModalVisible(false);
+    setSelectedReviewItem(null);
   };
 
   const renderOrderItem = ({ item }) => (
@@ -74,6 +133,26 @@ const Order = ({ navigation }) => {
               {(furniture.tongGia || 0).toLocaleString('vi-VN')} đ
             </Text>
           </View>
+          {item.status === 'Đã đặt' && (() => {
+            const furnitureIdRaw = furniture.furnitureItem?.id || furniture.furnitureItem?.furnitureId || furniture.furnitureItem?.docId;
+            const furnitureId = furnitureIdRaw ? String(furnitureIdRaw) : undefined;
+            const alreadyReviewed = furnitureId ? reviewedFurnitureIds.has(furnitureId) : false;
+            if (alreadyReviewed) {
+              return (
+                <View style={styles.reviewedBadge}>
+                  <Text style={styles.reviewedBadgeText}>Đã đánh giá</Text>
+                </View>
+              );
+            }
+            return (
+              <TouchableOpacity
+                style={styles.reviewButton}
+                onPress={() => openReviewModal(furniture)}
+              >
+                <Text style={styles.reviewButtonText}>Đánh giá</Text>
+              </TouchableOpacity>
+            );
+          })()}
         </View>
       ))}
       <View style={styles.orderFooter}>
@@ -97,12 +176,34 @@ const Order = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
+      <InventoryRestoreNotification
+        visible={notification.visible}
+        message={notification.message}
+        onClose={closeNotification}
+      />
+      <WriteReview
+        visible={reviewModalVisible}
+        onClose={closeReviewModal}
+        furnitureId={selectedReviewItem?.furnitureId}
+        furnitureName={selectedReviewItem?.furnitureName}
+        onReviewSubmitted={() => {
+          if (selectedReviewItem?.furnitureId) {
+            setReviewedFurnitureIds(prev => {
+              const next = new Set(prev);
+              next.add(String(selectedReviewItem.furnitureId));
+              return next;
+            });
+          }
+          closeReviewModal();
+        }}
+      />
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Icon name="arrow-back" size={24} color={PRIMARY} />
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <View style={styles.backButton}>
+            <Icon name="arrow-back" size={22} color={PRIMARY} />
+          </View>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Đơn hàng của tôi</Text>
-        <View style={{ width: 24 }} />
       </View>
 
       <View style={styles.statusContainer}>
@@ -151,26 +252,24 @@ const styles = StyleSheet.create({
     backgroundColor: SECONDARY,
   },
   header: {
-    height: 60,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#fff',
-    paddingHorizontal: 15,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
-    borderBottomLeftRadius: 18,
-    borderBottomRightRadius: 18,
   },
   backButton: {
-    marginRight: 10,
-    padding: 6,
-    borderRadius: 8,
-    backgroundColor: SECONDARY,
+    borderWidth: 1,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
   },
   headerTitle: {
     fontSize: 20,
@@ -178,6 +277,7 @@ const styles = StyleSheet.create({
     color: PRIMARY,
     flex: 1,
     textAlign: 'center',
+    marginRight: 50,
   },
   statusContainer: {
     paddingVertical: 12,
@@ -300,6 +400,34 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     color: '#000D66',
     fontWeight: '500',
+    fontSize: 14,
+  },
+  reviewButton: {
+    backgroundColor: PRIMARY,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    alignSelf: 'flex-start'
+  },
+  reviewButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  reviewedBadge: {
+    backgroundColor: '#E6E8F0',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#D1D5DB'
+  },
+  reviewedBadgeText: {
+    color: '#6B7280',
+    fontWeight: '600',
     fontSize: 14,
   },
 });

@@ -1,8 +1,10 @@
-import { StyleSheet, Text, View, FlatList, ActivityIndicator, TouchableOpacity } from 'react-native'
+import { StyleSheet, Text, View, FlatList, ActivityIndicator, TouchableOpacity, Alert } from 'react-native'
 import React, { useEffect, useState } from 'react'
 import { collection, query, orderBy, doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../Firebase/FirebaseConfig';
+import { updateOrderStatus } from '../Firebase/FirebaseAPI';
 import { Ionicons } from '@expo/vector-icons';
+import InventoryRestoreNotification from '../component/InventoryRestoreNotification';
 
 const OrderScreen = () => {
     const [orders, setOrders] = useState([]);
@@ -15,6 +17,10 @@ const OrderScreen = () => {
         completed: 0,
         cancelled: 0,
         revenue: 0
+    });
+    const [notification, setNotification] = useState({
+        visible: false,
+        message: ''
     });
 
     useEffect(() => {
@@ -111,6 +117,45 @@ const OrderScreen = () => {
         }
     };
 
+    const handleCancelOrder = async (orderId) => {
+        Alert.alert(
+            "Xác nhận hủy đơn",
+            "Bạn có chắc chắn muốn hủy đơn hàng này? Số lượng sản phẩm sẽ được hoàn trả vào kho.",
+            [
+                {
+                    text: "Không",
+                    style: "cancel"
+                },
+                {
+                    text: "Có",
+                    onPress: async () => {
+                        try {
+                            const result = await updateOrderStatus(orderId, "Đã hủy");
+                            if (result.success) {
+                                setNotification({
+                                    visible: true,
+                                    message: result.message
+                                });
+                                // Tự động ẩn thông báo sau 5 giây
+                                setTimeout(() => {
+                                    setNotification({ visible: false, message: '' });
+                                }, 5000);
+                            } else {
+                                Alert.alert("Lỗi", result.message);
+                            }
+                        } catch (error) {
+                            Alert.alert("Lỗi", "Không thể hủy đơn hàng");
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const closeNotification = () => {
+        setNotification({ visible: false, message: '' });
+    };
+
     const renderOrderItem = ({ item }) => (
         <View style={[styles.orderCard, item.status === 'Đã hủy' && styles.cancelledOrderCard]}>
             <View style={styles.orderHeader}>
@@ -160,6 +205,19 @@ const OrderScreen = () => {
                     </View>
                 ))}
             </View>
+
+            {/* Action buttons */}
+            {item.status !== 'Đã hủy' && item.status !== 'Đã đặt' && (
+                <View style={styles.actionButtons}>
+                    <TouchableOpacity 
+                        style={styles.cancelButton}
+                        onPress={() => handleCancelOrder(item.id)}
+                    >
+                        <Ionicons name="close-circle-outline" size={20} color="#fff" />
+                        <Text style={styles.cancelButtonText}>Hủy đơn hàng</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
         </View>
     );
 
@@ -174,6 +232,11 @@ const OrderScreen = () => {
 
     return (
         <View style={styles.container}>
+            <InventoryRestoreNotification
+                visible={notification.visible}
+                message={notification.message}
+                onClose={closeNotification}
+            />
             <View style={styles.header}>
                 <Text style={styles.headerTitle}>Danh sách đơn hàng</Text>
                 <View style={styles.statsContainer}>
@@ -406,5 +469,28 @@ const styles = StyleSheet.create({
     revenueValue: {
         fontSize: 16,
         color: '#000d66',
+    },
+    actionButtons: {
+        marginTop: 15,
+        paddingTop: 15,
+        borderTopWidth: 1,
+        borderTopColor: '#e0e7ff',
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+    },
+    cancelButton: {
+        backgroundColor: '#ff4444',
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 15,
+        paddingVertical: 8,
+        borderRadius: 8,
+        marginLeft: 10,
+    },
+    cancelButtonText: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '600',
+        marginLeft: 5,
     },
 });

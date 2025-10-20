@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useContext } from 'react';
-import { View, Text, FlatList, StyleSheet, Image } from 'react-native';
+import { View, Text, FlatList, StyleSheet, Image, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { UserContext } from '../Firebase/UserContext';
 import { loadCart } from '../Firebase/FirebaseAPI';
 
@@ -22,10 +23,15 @@ const CartScreen = () => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Giỏ Hàng</Text>
-      {cartItems.length > 0 ? (
-        <>
-          <FlatList
+      <View style={styles.headerNav}>
+        <View style={styles.iconBack} />
+        <Text style={styles.headerTitle}>Giỏ hàng</Text>
+        <View style={styles.iconBack} />
+      </View>
+      <View style={styles.content}>
+        {cartItems.length > 0 ? (
+          <>
+            <FlatList
             data={cartItems}
             keyExtractor={(item, idx) => (item.id ? item.id.toString() : idx.toString())}
             renderItem={({ item }) => (
@@ -51,13 +57,46 @@ const CartScreen = () => {
       ) : (
         <Text style={styles.emptyText}>Giỏ hàng của bạn hiện tại trống.</Text>
       )}
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: '#f7f8fa' },
-  header: { fontSize: 24, fontWeight: 'bold', marginBottom: 20, color: '#000d66' },
+  container: { 
+    flex: 1, 
+    backgroundColor: '#f7f8fa' 
+  },
+  headerNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 10,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  iconBack: {
+    borderWidth: 1,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#000D66',
+  },
+  content: {
+    flex: 1,
+    padding: 20,
+  },
   cartItem: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -1,11 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, TouchableOpacity, Alert, Image, Modal, TextInput, ActivityIndicator } from 'react-native';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { titles } from '../globals/style';
 import { db } from '../Firebase/FirebaseConfig';
 import{collection,onSnapshot, updateDoc, doc } from 'firebase/firestore'
-import { removeFurniture } from '../Firebase/FirebaseAPI';
+import { removeFurniture, updateFurnitureDiscount } from '../Firebase/FirebaseAPI';
+import StockStatus from '../component/StockStatus';
+import PriceDisplay from '../component/PriceDisplay';
+import DiscountBadge from '../component/DiscountBadge';
+import GlassDiscountBadge from '../component/GlassDiscountBadge';
 
 const FurnitureScreen = () => {
   const navigation  = useNavigation();
@@ -15,6 +19,8 @@ const FurnitureScreen = () => {
   const [editName, setEditName] = useState('');
   const [editPrice, setEditPrice] = useState('');
   const [editDesc, setEditDesc] = useState('');
+  const [editQuantity, setEditQuantity] = useState('');
+  const [editDiscount, setEditDiscount] = useState('');
   const [loadingEdit, setLoadingEdit] = useState(false);
 
   useEffect (()=> {
@@ -64,6 +70,8 @@ const FurnitureScreen = () => {
     setEditName(item.furnitureName);
     setEditPrice(item.furniturePrice.toString());
     setEditDesc(item.description);
+    setEditQuantity(item.quantity ? item.quantity.toString() : '0');
+    setEditDiscount(item.discountPercentage ? item.discountPercentage.toString() : '');
     setEditModalVisible(true);
   };
 
@@ -73,18 +81,41 @@ const FurnitureScreen = () => {
     setEditName('');
     setEditPrice('');
     setEditDesc('');
+    setEditQuantity('');
+    setEditDiscount('');
   };
 
   const handleSaveEdit = async () => {
     if (!editingItem) return;
+    if (parseInt(editQuantity) < 0) {
+      Alert.alert('Lỗi', 'Số lượng không thể âm');
+      return;
+    }
+    
+    const discount = parseFloat(editDiscount) || 0;
+    if (discount < 0 || discount > 100) {
+      Alert.alert('Lỗi', 'Phần trăm giảm giá phải từ 0 đến 100');
+      return;
+    }
+    
     setLoadingEdit(true);
     try {
       const ref = doc(db, 'furnitures', editingItem.id);
-      await updateDoc(ref, {
+      const updateData = {
         furnitureName: editName,
-        furniturePrice: editPrice,
+        furniturePrice: parseFloat(editPrice),
         description: editDesc,
-      });
+        quantity: parseInt(editQuantity),
+      };
+
+      // Chỉ thêm discountPercentage nếu có giá trị
+      if (discount > 0) {
+        updateData.discountPercentage = discount;
+      } else {
+        updateData.discountPercentage = null;
+      }
+
+      await updateDoc(ref, updateData);
       Alert.alert('Thành công', 'Đã cập nhật sản phẩm!');
       closeEditModal();
     } catch (error) {
@@ -99,18 +130,44 @@ const FurnitureScreen = () => {
       {item.image ? (
         <View style={styles.imageWrapper}>
           <Image source={{ uri: item.image }} style={styles.furnitureImage} />
+          {/* Glass badge giảm giá */}
+          {item.discountPercentage > 0 && (
+            <View style={styles.discountBadgeContainer}>
+              <GlassDiscountBadge 
+                discountPercentage={item.discountPercentage} 
+                size="small"
+                glassIntensity="medium"
+              />
+            </View>
+          )}
         </View>
       ) : null}
       <View style={{ flex: 1, marginLeft: item.image ? 12 : 0 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text style={styles.itemName}>{item.furnitureName}</Text>
           <View style={styles.actionIcons}>
-            <Feather name="edit" size={22} color="#000d66" style={{ marginRight: 16 }} onPress={() => openEditModal(item)} />
-            <Feather name="trash-2" size={22} color="#ff4444" onPress={() => deleteFurniture(item.id)} />
+            <TouchableOpacity 
+              style={[styles.editButton, { marginRight: 12 }]}
+              onPress={() => openEditModal(item)}
+            >
+              <Feather name="edit" size={22} color="#000d66" />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.deleteButton}
+              onPress={() => deleteFurniture(item.id)}
+            >
+              <MaterialIcons name="delete-outline" size={22} color="#E53935" />
+            </TouchableOpacity>
           </View>
         </View>
-        <Text style={styles.itemPrice}>{Number(item.furniturePrice).toLocaleString('vi-VN')} đ</Text>
+        <PriceDisplay 
+          originalPrice={item.furniturePrice}
+          discountPercentage={item.discountPercentage}
+          fontSize={15}
+          style={styles.priceContainer}
+        />
         <Text style={styles.itemDesc}>{item.description}</Text>
+        <StockStatus quantity={item.quantity} />
       </View>
     </View>
   );
@@ -159,6 +216,20 @@ const FurnitureScreen = () => {
               onChangeText={setEditDesc}
               style={{ borderWidth:1, borderColor:'#ccc', borderRadius:8, marginBottom:10, padding:8, minHeight:60 }}
               multiline
+            />
+            <TextInput
+              placeholder="Số lượng tồn kho"
+              value={editQuantity}
+              onChangeText={setEditQuantity}
+              keyboardType="numeric"
+              style={{ borderWidth:1, borderColor:'#ccc', borderRadius:8, marginBottom:10, padding:8 }}
+            />
+            <TextInput
+              placeholder="Phần trăm giảm giá (0-100)"
+              value={editDiscount}
+              onChangeText={setEditDiscount}
+              keyboardType="numeric"
+              style={{ borderWidth:1, borderColor:'#ccc', borderRadius:8, marginBottom:10, padding:8 }}
             />
             <View style={{ flexDirection:'row', justifyContent:'flex-end', marginTop:10 }}>
               <TouchableOpacity onPress={closeEditModal} style={{ marginRight:16 }}>
@@ -213,12 +284,25 @@ const styles = StyleSheet.create({
     borderColor: '#000d66',
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
   },
   furnitureImage: {
     width: 60,
     height: 60,
     resizeMode: 'cover',
     borderRadius: 12,
+  },
+  discountBadgeContainer: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    zIndex: 10,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  priceContainer: {
+    marginTop: 2,
+    marginBottom: 2,
   },
   itemName:{
     fontSize:17,
@@ -242,6 +326,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginLeft: 8,
+  },
+  editButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FFCDD2',
+    backgroundColor: '#FFEBEE',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   addButton: {
     position: 'absolute',

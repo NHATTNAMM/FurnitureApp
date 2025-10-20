@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from 'react';
+import React, { useEffect, useState, useContext, useRef } from 'react';
 import { StyleSheet, Text, View, FlatList, TouchableOpacity, Alert, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { loadOrdersRealTime, updateOrderStatus, LogOut } from '../Firebase/FirebaseAPI';
@@ -6,12 +6,16 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import AntDesign from 'react-native-vector-icons/AntDesign';
 import { UserContext } from '../Firebase/UserContext';
+import NewOrderNotification from '../component/NewOrderNotification';
 
 const HomeShipper = ({ navigation }) => {
   const { user } = useContext(UserContext);
   const [pendingOrders, setPendingOrders] = useState([]);
   const [inProgressOrders, setInProgressOrders] = useState([]);
   const [activeTab, setActiveTab] = useState('pending');
+  const [showNotification, setShowNotification] = useState(false);
+  const [newOrderCount, setNewOrderCount] = useState(0);
+  const previousPendingCount = useRef(0);
 
   useEffect(() => {
     if (user && user.id) {
@@ -19,6 +23,16 @@ const HomeShipper = ({ navigation }) => {
         if (orderData) {
           const pending = orderData.filter(order => order.status === 'Chờ giao hàng');
           const inProgress = orderData.filter(order => order.status === 'Đang giao');
+          
+          // Kiểm tra nếu có đơn hàng mới
+          const currentPendingCount = pending.length;
+          if (currentPendingCount > previousPendingCount.current && previousPendingCount.current > 0) {
+            const newOrders = currentPendingCount - previousPendingCount.current;
+            setNewOrderCount(newOrders);
+            setShowNotification(true);
+          }
+          previousPendingCount.current = currentPendingCount;
+          
           setPendingOrders(pending);
           setInProgressOrders(inProgress);
         }
@@ -136,6 +150,16 @@ const HomeShipper = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
+      <NewOrderNotification
+        visible={showNotification}
+        orderCount={newOrderCount}
+        onPress={() => {
+          setShowNotification(false);
+          setActiveTab('pending');
+        }}
+        onClose={() => setShowNotification(false)}
+      />
+      
       <View style={styles.header}>
         <Image 
           source={require('../../assets/images/furniturelogo.png')} 
@@ -152,11 +176,18 @@ const HomeShipper = ({ navigation }) => {
           style={[styles.tab, activeTab === 'pending' && styles.activeTab]}
           onPress={() => setActiveTab('pending')}
         >
-          <MaterialIcons 
-            name="pending-actions" 
-            size={24} 
-            color={activeTab === 'pending' ? '#000D66' : '#666'} 
-          />
+          <View style={styles.tabIconContainer}>
+            <MaterialIcons 
+              name="pending-actions" 
+              size={24} 
+              color={activeTab === 'pending' ? '#000D66' : '#666'} 
+            />
+            {pendingOrders.length > 0 && (
+              <View style={styles.tabBadge}>
+                <Text style={styles.tabBadgeText}>{pendingOrders.length}</Text>
+              </View>
+            )}
+          </View>
           <Text style={[styles.tabText, activeTab === 'pending' && styles.activeTabText]}>
             Chờ giao hàng
           </Text>
@@ -165,11 +196,18 @@ const HomeShipper = ({ navigation }) => {
           style={[styles.tab, activeTab === 'inProgress' && styles.activeTab]}
           onPress={() => setActiveTab('inProgress')}
         >
-          <MaterialIcons 
-            name="local-shipping" 
-            size={24} 
-            color={activeTab === 'inProgress' ? '#000D66' : '#666'} 
-          />
+          <View style={styles.tabIconContainer}>
+            <MaterialIcons 
+              name="local-shipping" 
+              size={24} 
+              color={activeTab === 'inProgress' ? '#000D66' : '#666'} 
+            />
+            {inProgressOrders.length > 0 && (
+              <View style={styles.tabBadge}>
+                <Text style={styles.tabBadgeText}>{inProgressOrders.length}</Text>
+              </View>
+            )}
+          </View>
           <Text style={[styles.tabText, activeTab === 'inProgress' && styles.activeTabText]}>
             Đang giao
           </Text>
@@ -246,6 +284,26 @@ const styles = StyleSheet.create({
   },
   activeTab: {
     backgroundColor: '#F0F4FF',
+  },
+  tabIconContainer: {
+    position: 'relative',
+  },
+  tabBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#FF4444',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 5,
+  },
+  tabBadgeText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: 'bold',
   },
   tabText: {
     fontSize: 16,

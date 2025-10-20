@@ -31,6 +31,8 @@ const AddFurniture = () => {
   const [tagInput, setTagInput] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [quantity, setQuantity] = useState('1');
+  const [discountPercentage, setDiscountPercentage] = useState('');
   const navigation = useNavigation();
 
   useEffect(() => {
@@ -102,7 +104,7 @@ const AddFurniture = () => {
   };
 
   const saveProduct = async (uri) => {
-    if (!productName || !productPrice || !productImage) {
+    if (!productName || !productPrice || !productImage || !quantity) {
       Alert.alert('Điền thông tin', 'Nhập đầy đủ thông tin');
       return;
     }
@@ -110,12 +112,24 @@ const AddFurniture = () => {
       Alert.alert('Thông báo', 'Vui lòng cập nhật thông tin cửa hàng trước khi thêm sản phẩm.');
       return;
     }
+    if (parseInt(quantity) <= 0) {
+      Alert.alert('Lỗi', 'Số lượng phải lớn hơn 0');
+      return;
+    }
+    
+    // Kiểm tra phần trăm giảm giá
+    const discount = parseFloat(discountPercentage) || 0;
+    if (discount < 0 || discount > 100) {
+      Alert.alert('Lỗi', 'Phần trăm giảm giá phải từ 0 đến 100');
+      return;
+    }
+    
     setLoading(true);
     try {
       const productCollection = collection(db, 'furnitures');
-      const newProductRef = await addDoc(productCollection, {
+      const productData = {
         furnitureName: productName,
-        furniturePrice: productPrice,
+        furniturePrice: parseFloat(productPrice),
         image: uri,
         idStore: user.id,
         storeName,
@@ -123,8 +137,16 @@ const AddFurniture = () => {
         storePhone,
         description,
         tag,
+        quantity: parseInt(quantity),
         createdAt: new Date(),
-      });
+      };
+
+      // Chỉ thêm discountPercentage nếu có giá trị
+      if (discount > 0) {
+        productData.discountPercentage = discount;
+      }
+
+      const newProductRef = await addDoc(productCollection, productData);
       await updateDoc(newProductRef, {
         furnitureId: newProductRef.id,
       });
@@ -209,6 +231,22 @@ const AddFurniture = () => {
                 keyboardType="numeric"
                 placeholderTextColor="gray"
                 onChangeText={setProductPrice}
+                style={styles.TextInput}
+              />
+              <TextInput
+                placeholder="Số lượng tồn kho"
+                value={quantity}
+                keyboardType="numeric"
+                placeholderTextColor="gray"
+                onChangeText={setQuantity}
+                style={styles.TextInput}
+              />
+              <TextInput
+                placeholder="Phần trăm giảm giá (0-100)"
+                value={discountPercentage}
+                keyboardType="numeric"
+                placeholderTextColor="gray"
+                onChangeText={setDiscountPercentage}
                 style={styles.TextInput}
               />
               <TextInput
