@@ -10,7 +10,7 @@ import { FontAwesome5 } from '@expo/vector-icons';
 
 const screenWidth = Dimensions.get('window').width;
 
-const StatisticalScreen = () => {
+const StatisticalScreen = ({ onNavigateToMenu }) => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const navigation = useNavigation();
@@ -79,7 +79,7 @@ const StatisticalScreen = () => {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Thống kê đơn hàng</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('OrderScreen')}>
+          <TouchableOpacity onPress={() => onNavigateToMenu && onNavigateToMenu('4')}>
             <Ionicons name="arrow-forward" size={24} color="#000d66" />
           </TouchableOpacity>
         </View>
@@ -208,27 +208,31 @@ const StatisticalScreen = () => {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Thống kê hệ thống</Text>
         <View style={styles.statsGrid}>
-          <View style={styles.statCard}>
+          <TouchableOpacity 
+            style={styles.statCard}
+            onPress={() => onNavigateToMenu && onNavigateToMenu('2')}
+            activeOpacity={0.7}
+          >
             <View style={styles.statHeader}>
               <Ionicons name="people-outline" size={24} color="#000d66" />
-              <TouchableOpacity onPress={() => navigation.navigate('UserScreen')}>
-                <Ionicons name="arrow-forward" size={24} color="#000d66" />
-              </TouchableOpacity>
+              <Ionicons name="arrow-forward" size={24} color="#000d66" />
             </View>
             <Text style={styles.statValue}>{stats.totalUsers}</Text>
             <Text style={styles.statLabel}>Người dùng</Text>
-          </View>
+          </TouchableOpacity>
 
-          <View style={styles.statCard}>
+          <TouchableOpacity 
+            style={styles.statCard}
+            onPress={() => onNavigateToMenu && onNavigateToMenu('3')}
+            activeOpacity={0.7}
+          >
             <View style={styles.statHeader}>
               <MaterialCommunityIcons name="sofa" size={28} color="#000d66" />
-              <TouchableOpacity onPress={() => navigation.navigate('FurnitureScreen')}>
-                <Ionicons name="arrow-forward" size={24} color="#000d66" />
-              </TouchableOpacity>
+              <Ionicons name="arrow-forward" size={24} color="#000d66" />
             </View>
             <Text style={styles.statValue}>{stats.totalFurnitures}</Text>
             <Text style={styles.statLabel}>Sản phẩm</Text>
-          </View>
+          </TouchableOpacity>
         </View>
       </View>
     </ScrollView>

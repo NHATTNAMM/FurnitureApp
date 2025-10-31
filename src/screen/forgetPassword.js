@@ -3,9 +3,12 @@ import {
   StyleSheet, Text, TextInput, TouchableOpacity, View, Alert, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, Image 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { resetPasswordEmail } from '../Firebase/FirebaseAPI';
 
 const ForgetPassword = () => {
+  const navigation = useNavigation();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -40,12 +43,21 @@ const ForgetPassword = () => {
 
   return (
     <SafeAreaView style={{flex: 1, backgroundColor: '#F0F4FF'}}>
+      <View style={styles.headerNav}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <View style={styles.iconBack}>
+            <Ionicons name="arrow-back" size={22} color="#000D66" />
+          </View>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Quên mật khẩu</Text>
+        <View style={{width: 40}} />
+      </View>
       <View style={{alignItems: 'center', marginTop: 30, marginBottom: 10}}>
         <Image source={require('../../assets/images/furniturelogo.png')} style={{width: 60, height: 60, borderRadius: 15, marginBottom: 8}} />
         <Text style={{fontSize: 30, fontWeight: 'bold', color: '#000D66', letterSpacing: 1}}>NỘI THẤT DECCOR</Text>
       </View>
       <View style={{flex: 1, backgroundColor: '#fff', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 24, elevation: 8}}>
-        <Text style={{fontSize: 28, fontWeight: 'bold', color: '#000D66', marginBottom: 24, textAlign: 'center'}}>Quên mật khẩu</Text>
+        <Text style={{fontSize: 22, fontWeight: 'bold', color: '#000D66', marginBottom: 24, textAlign: 'center'}}>Đặt lại mật khẩu</Text>
         <Text style={{fontSize: 16, color: '#001F99', marginBottom: 24, textAlign: 'center'}}>Nhập email đăng ký để nhận mật khẩu mới</Text>
         <TextInput
           style={[styles.input, error ? styles.inputError : null, {marginBottom: 18}]}
@@ -75,6 +87,32 @@ const ForgetPassword = () => {
 export default ForgetPassword;
 
 const styles = StyleSheet.create({
+  headerNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 10,
+    backgroundColor: '#F0F4FF',
+  },
+  iconBack: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#000D66',
+    flex: 1,
+    textAlign: 'center',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#F0F4FF',

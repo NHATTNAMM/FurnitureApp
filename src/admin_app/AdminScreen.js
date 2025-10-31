@@ -77,7 +77,7 @@ const AdminScreen = () => {
     const renderItem = () =>{
         switch(selectedMenu){
             case '1':
-                return <StatisticalScreen/>
+                return <StatisticalScreen onNavigateToMenu={setSelectedMenu} />
             case '2':
                 return <UserScreen/>
             case '3':

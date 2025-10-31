@@ -43,31 +43,6 @@ const LoginScreen = () => {
     }
   };
 
-  const handleAdminLogin = async () => {
-    if (!email || !password) {
-      Alert.alert("Thông báo", "Vui lòng nhập tài khoản và mật khẩu");
-      return;
-    }
-    setLoading(true);
-    try {
-    const result = await LogIn({ email, password });
-    if (result.success) {
-      const userRole = result.user.role;
-      if (userRole === "admin") {
-          navigation.navigate('AdminHome');
-      } else {
-          Alert.alert("Thông báo", "Tài khoản này không có quyền admin!");
-      }
-    } else {
-      Alert.alert("Đăng nhập thất bại", result.error);
-      }
-    } catch (error) {
-      Alert.alert("Lỗi", "Có lỗi xảy ra khi đăng nhập");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <SafeAreaView style={{flex: 1, backgroundColor: '#F0F4FF'}}>
       <View style={{alignItems: 'center', marginTop: 30, marginBottom: 10}}>
@@ -114,11 +89,6 @@ const LoginScreen = () => {
           <TouchableOpacity onPress={handleLogIn} style={[styles.loginButton, {width: '90%'}]}>
             <Text style={styles.loginText}>Đăng nhập</Text>
           </TouchableOpacity>
-          <View style={{flexDirection: 'row', width: '90%', justifyContent: 'flex-end', marginBottom: 10}}>
-            <TouchableOpacity onPress={handleAdminLogin} style={{padding: 6}}>
-              <Text style={{color: '#000D66', fontWeight: 'bold'}}>Đăng nhập Admin</Text>
-            </TouchableOpacity>
-          </View>
           <Text style={styles.otherLoginText}>Hoặc đăng nhập bằng</Text>
           <View style={styles.iconLoginLayout}>
             <TouchableOpacity style={styles.iconLogin}>

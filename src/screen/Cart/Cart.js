@@ -17,19 +17,21 @@ const Cart = ({ navigation }) => {
   const [selectedStatus, setSelectedStatus] = useState('Chờ xác nhận');
   const statusList = ['Chờ xác nhận', 'Chờ giao hàng', 'Đang giao', 'Đã đặt'];
   const [selectedItems, setSelectedItems] = useState(new Set());
+  const [isFirstLoad, setIsFirstLoad] = useState(true);
 
   useEffect(() => {
     if (user && user.id) {
       const unsubscribeUser = loadCartRealTime(user.id, (cartData) => {
         if (cartData) {
           setCart(cartData);
-          // Auto-select all items in "Chờ xác nhận" status when first load
-          if (selectedStatus === 'Chờ xác nhận') {
+          // Auto-select all items in "Chờ xác nhận" status ONLY on first load
+          if (isFirstLoad && selectedStatus === 'Chờ xác nhận') {
             const itemsToSelect = cartData
               .filter(item => !item.status || item.status === 'Chờ xác nhận')
               .map(item => item.furnitureItem?.furnitureId)
               .filter(id => id);
             setSelectedItems(new Set(itemsToSelect));
+            setIsFirstLoad(false);
           }
         }
       });
