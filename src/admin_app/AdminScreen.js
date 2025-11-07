@@ -22,6 +22,7 @@ const menuItem=[
     { key: '3', label: 'Sản phẩm' },
     { key: '4', label: 'Đơn hàng' },
     { key: '5', label: 'Cập nhật thông tin cửa hàng' },
+    { key: '7', label: 'Quản lý Chat' },
     { key: '6', label: 'Đăng xuất' },
 ]
 
@@ -30,6 +31,7 @@ const AdminScreen = () => {
     const navigation = useNavigation();
     const [selectedMenu, setSelectedMenu] = useState('1')
     const [sidebar, setSidebar] = useState(true);
+    const [shouldNavigateToChat, setShouldNavigateToChat] = useState(false);
 
     useEffect(() => {
         // Kiểm tra nếu không phải admin thì chuyển về trang đăng nhập
@@ -48,7 +50,17 @@ const AdminScreen = () => {
                 ]
             );
         }
-    }, [user]);
+    }, [user, navigation]); // ✅ Thêm navigation vào dependencies
+
+    // ✅ Handle navigation to Chat screen
+    useEffect(() => {
+        if (shouldNavigateToChat) {
+            navigation.navigate('AdminChat');
+            setShouldNavigateToChat(false);
+            // Reset menu về 1 sau khi navigate
+            setSelectedMenu('1');
+        }
+    }, [shouldNavigateToChat, navigation]);
 
     const handleLogOut = () =>{
         Alert.alert("Xác nhận", "Bạn có chắc muốn đăng xuất?",[
@@ -86,6 +98,12 @@ const AdminScreen = () => {
                 return <OrderScreen/>
             case '5':
                 return <UpdateFurnitureStoreScreen />;
+            case '7':
+                // ✅ Set flag to navigate in useEffect
+                if (!shouldNavigateToChat) {
+                    setShouldNavigateToChat(true);
+                }
+                return null;
             default:
                 return null;
         }
@@ -98,6 +116,7 @@ const AdminScreen = () => {
             case '3': return 'Danh sách sản phẩm';
             case '4': return 'Danh sách đơn hàng';
             case '5': return 'Cập nhật thông tin cửa hàng';
+            case '7': return 'Quản lý Chat';
             default: return '';
         }
     };
@@ -211,6 +230,7 @@ const getIconName = (key) => {
         case '3': return 'cube';
         case '4': return 'receipt';
         case '5': return 'business';
+        case '7': return 'chatbubbles';
         case '6': return 'log-out';
         default: return 'square';
     }

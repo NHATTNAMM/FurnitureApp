@@ -28,6 +28,7 @@ import HomeShipper from '../Shipper/HomeShipper';
 import SearchScreen from '../screen/SearchScreen';
 import BestSellingProducts from '../screen/BestSellingProducts';
 import MyReviewsScreen from '../screen/MyReviewsScreen';
+import AdminChatScreen from '../admin_app/AdminChatScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -79,6 +80,11 @@ const ScreensNavigation = () => {
             },
             headerTintColor: '#fff',
           }}
+        />
+        <Stack.Screen 
+          name="AdminChat" 
+          component={AdminChatScreen}
+          options={{ headerShown: false }}
         />
       </Stack.Navigator>
   )

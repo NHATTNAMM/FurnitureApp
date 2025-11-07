@@ -31,6 +31,7 @@ import OutOfStockBadge from '../component/OutOfStockBadge';
 import PriceDisplay from '../component/PriceDisplay';
 import DiscountBadge from '../component/DiscountBadge';
 import GlassDiscountBadge from '../component/GlassDiscountBadge';
+import ChatButton from '../component/ChatButton';
 
 const { width } = Dimensions.get('window');
 
@@ -372,6 +373,9 @@ const HomeScreen = () => {
             </View>
           </View>
         </Modal>
+
+        {/* Chat Button */}
+        <ChatButton />
       </SafeAreaView>
       <BottomNavigation cartItemCount={cartItems.length} />
     </View>
