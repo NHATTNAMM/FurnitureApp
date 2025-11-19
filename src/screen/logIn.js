@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, Text, TextInput, StyleSheet, Image, TouchableOpacity, 
   KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, Alert 
@@ -10,36 +10,90 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useNavigation } from '@react-navigation/native';
 import { LogIn } from '../Firebase/FirebaseAPI';
 import LoadScreen from '../component/LoadScreen';
+import { auth } from '../Firebase/FirebaseConfig';
+import { onAuthStateChanged } from 'firebase/auth';
 
 const LoginScreen = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [isAuthReady, setIsAuthReady] = useState(false);
 
   const navigation = useNavigation();
 
+  // Đảm bảo Firebase Auth đã khởi tạo xong
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!isAuthReady) {
+        setIsAuthReady(true);
+      }
+      // Nếu đã đăng nhập và có role thì navigate luôn
+      if (user && !loading) {
+        // Không tự động navigate ở đây để tránh conflict
+      }
+    });
+
+    return () => unsubscribe();
+  }, [isAuthReady, loading]);
+
   const handleLogIn = async () => {
-    if (!email || !password) {
-      Alert.alert("Thông báo", "Vui lòng nhập tài khoản và mật khẩu");
+    if (!isAuthReady) {
+      setErrorMessage("Đang khởi tạo hệ thống, vui lòng đợi...");
       return;
     }
+
+    if (!email || !password) {
+      setErrorMessage("Vui lòng nhập tài khoản và mật khẩu");
+      return;
+    }
+    
+    // Xóa thông báo lỗi cũ
+    setErrorMessage('');
     setLoading(true);
 
-    const result = await LogIn({ email, password });
-    setLoading(false);
-
-    if (result.success) {
-      const userRole = result.user.role;
-      if (userRole === "shipper") {
-        navigation.navigate('HomeShipper');
-      } else if (userRole === "admin") {
-        navigation.navigate('AdminHome');
+    try {
+      console.log('Starting login process...'); // Debug log
+      
+      const result = await LogIn({ email, password });
+      
+      console.log('Login result:', result); // Debug log
+      
+      if (result.success) {
+        const userRole = result.user.role;
+        console.log('Login successful, user role:', userRole); // Debug log
+        
+        // Đợi một chút để UserContext xử lý auth state
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Điều hướng dựa trên role
+        setLoading(false); // Set loading false trước khi navigate
+        
+        if (userRole === "shipper") {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'HomeShipper' }],
+          });
+        } else if (userRole === "admin") {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'AdminHome' }],
+          });
+        } else {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Home' }],
+          });
+        }
       } else {
-        navigation.navigate('Home');
+        setLoading(false);
+        setErrorMessage(result.error || "Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.");
       }
-    } else {
-      Alert.alert("Đăng nhập thất bại", result.error);
+    } catch (error) {
+      console.error('Login error:', error);
+      setLoading(false);
+      setErrorMessage("Đã xảy ra lỗi. Vui lòng thử lại.");
     }
   };
 
@@ -61,7 +115,10 @@ const LoginScreen = () => {
               keyboardType="email-address"
               autoCapitalize="none"
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(text) => {
+                setEmail(text);
+                setErrorMessage(''); // Xóa thông báo lỗi khi người dùng nhập
+              }}
             />
           </View>
           <View style={[styles.inputContainer, {marginBottom: 18, width: '90%'}]}> 
@@ -72,7 +129,10 @@ const LoginScreen = () => {
               placeholderTextColor="#4D79FF"
               secureTextEntry={!showPassword}
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(text) => {
+                setPassword(text);
+                setErrorMessage(''); // Xóa thông báo lỗi khi người dùng nhập
+              }}
               autoCapitalize="none"
             />
             <Feather
@@ -83,11 +143,20 @@ const LoginScreen = () => {
               onPress={() => setShowPassword(!showPassword)}
             />
           </View>
+          {errorMessage ? (
+            <Text style={styles.errorText}>{errorMessage}</Text>
+          ) : null}
           <TouchableOpacity onPress={() => navigation.navigate('ForgetPassword')} style={{alignSelf: 'flex-end', marginBottom: 18}}>
             <Text style={styles.forgotPassword}>Quên mật khẩu?</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={handleLogIn} style={[styles.loginButton, {width: '90%'}]}>
-            <Text style={styles.loginText}>Đăng nhập</Text>
+          <TouchableOpacity 
+            onPress={handleLogIn} 
+            style={[styles.loginButton, {width: '90%'}, loading && {opacity: 0.7}]}
+            disabled={loading}
+          >
+            <Text style={styles.loginText}>
+              {loading ? "Đang đăng nhập..." : "Đăng nhập"}
+            </Text>
           </TouchableOpacity>
           <Text style={styles.otherLoginText}>Hoặc đăng nhập bằng</Text>
           <View style={styles.iconLoginLayout}>
@@ -221,6 +290,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#000D66',
     textDecorationLine: 'underline',
+  },
+  errorText: {
+    color: '#FF0000',
+    fontSize: 14,
+    marginBottom: 10,
+    textAlign: 'center',
+    width: '90%',
   },
 });
 

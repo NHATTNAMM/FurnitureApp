@@ -14,6 +14,7 @@ import UpdateFurnitureStoreScreen from '../admin_app/UpdateFurnitureStoreScreen'
 import UserScreen from '../admin_app/UserScreen';
 import AddFurniture from '../admin_app/Furniture/AddFurniture';
 import CartScreen from '../screen/CartScreen';
+import PaymentScreen from '../screen/PaymentScreen';
 import Profile from '../screen/profile/Profile';
 import ProfileDetail from '../screen/profile/ProfileDetail';
 import FurnitureItem from '../screen/FurnitureItem';
@@ -58,6 +59,7 @@ const ScreensNavigation = () => {
 
         <Stack.Screen name="SearchScreen" component={SearchScreen}/>
         <Stack.Screen name="Cart" component={Cart} options={{ title: 'Giỏ Hàng' }} />
+        <Stack.Screen name="PaymentScreen" component={PaymentScreen} options={{ title: 'Thanh toán' }} />
         
         <Stack.Screen name="AddFurniture" component={AddFurniture}/>
         <Stack.Screen name="FurnitureItem" component={FurnitureItem}/>

@@ -32,7 +32,13 @@ const Order = ({ navigation }) => {
     if (user && user.id) {
       const unsubscribe = loadOrdersRealTime(user.id, (orderData) => {
         if (orderData) {
-          setOrders(orderData);
+          // Sắp xếp đơn hàng mới nhất lên trên
+          const sortedOrders = orderData.sort((a, b) => {
+            const timeA = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || a.addedAt || 0;
+            const timeB = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || b.addedAt || 0;
+            return timeB - timeA; // Sắp xếp giảm dần (mới nhất trước)
+          });
+          setOrders(sortedOrders);
         }
       });
       return () => unsubscribe();
@@ -198,12 +204,34 @@ const Order = ({ navigation }) => {
         }}
       />
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity onPress={() => {
+          // Kiểm tra xem có thể goBack không, nếu không thì navigate về Home
+          if (navigation.canGoBack()) {
+            navigation.goBack();
+          } else {
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Home' }]
+            });
+          }
+        }}>
           <View style={styles.backButton}>
             <Icon name="arrow-back" size={22} color={PRIMARY} />
           </View>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Đơn hàng của tôi</Text>
+        {/* Thêm nút Home để chắc chắn */}
+        <TouchableOpacity 
+          onPress={() => {
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Home' }]
+            });
+          }}
+          style={styles.homeButton}
+        >
+          <Icon name="home" size={22} color={PRIMARY} />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.statusContainer}>
@@ -277,7 +305,16 @@ const styles = StyleSheet.create({
     color: PRIMARY,
     flex: 1,
     textAlign: 'center',
-    marginRight: 50,
+  },
+  homeButton: {
+    borderWidth: 1,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
   },
   statusContainer: {
     paddingVertical: 12,

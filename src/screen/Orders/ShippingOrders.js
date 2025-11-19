@@ -12,7 +12,13 @@ const ShippingOrders = () => {
       const unsubscribe = loadCartRealTime(user.id, (cartData) => {
         if (cartData) {
           const shippingOrders = cartData.filter((item) => item.status === 'Chờ giao hàng');
-          setOrders(shippingOrders);
+          // Sắp xếp đơn hàng mới nhất lên trên
+          const sortedOrders = shippingOrders.sort((a, b) => {
+            const timeA = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || a.addedAt || 0;
+            const timeB = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || b.addedAt || 0;
+            return timeB - timeA; // Sắp xếp giảm dần (mới nhất trước)
+          });
+          setOrders(sortedOrders);
         }
       });
       return unsubscribe;

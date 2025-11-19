@@ -1,16 +1,24 @@
 import React, { useEffect, useState, useContext } from 'react';
-import { View, Text, FlatList, StyleSheet, Image, TouchableOpacity } from 'react-native';
+import { View, Text, FlatList, StyleSheet, Image, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { UserContext } from '../Firebase/UserContext';
 import { loadCart } from '../Firebase/FirebaseAPI';
 
-const CartScreen = () => {
+const CartScreen = ({ navigation }) => {
   const { user } = useContext(UserContext);
   const [cartItems, setCartItems] = useState([]);
 
   useEffect(() => {
     if (user?.id) {
-      const unsubscribe = loadCart(user.id, setCartItems);
+      const unsubscribe = loadCart(user.id, (items) => {
+        // Sắp xếp theo timestamp nếu có, hoặc giữ nguyên thứ tự (mới nhất đã ở trên)
+        const sortedItems = items.sort((a, b) => {
+          const timeA = a.addedAt || 0;
+          const timeB = b.addedAt || 0;
+          return timeB - timeA; // Sắp xếp giảm dần (mới nhất trước)
+        });
+        setCartItems(sortedItems);
+      });
       return () => {
         if (typeof unsubscribe === 'function') unsubscribe();
       };
@@ -19,6 +27,22 @@ const CartScreen = () => {
 
   const getTotal = () => {
     return cartItems.reduce((sum, item) => sum + (item.tongGia || 0), 0);
+  };
+
+  const formatPrice = (price) => {
+    return new Intl.NumberFormat('vi-VN').format(price);
+  };
+
+  const handleCheckout = () => {
+    if (cartItems.length === 0) {
+      Alert.alert('Thông báo', 'Giỏ hàng trống! Vui lòng thêm sản phẩm trước khi thanh toán.');
+      return;
+    }
+    // Chuyển tất cả items trong cart đến PaymentScreen
+    navigation.navigate('PaymentScreen', { 
+      selectedItems: cartItems,
+      totalAmount: getTotal()
+    });
   };
 
   return (
@@ -42,16 +66,21 @@ const CartScreen = () => {
                 />
                 <View style={styles.info}>
                   <Text style={styles.name}>{item.furnitureItem?.furnitureName || item.furniName}</Text>
-                  <Text style={styles.price}>{item.furnitureItem?.furniturePrice || item.furniPrice} đ</Text>
+                  <Text style={styles.price}>{formatPrice(item.furnitureItem?.furniturePrice || item.furniPrice)} đ</Text>
                   <Text style={styles.quantity}>Số lượng: {item.soLuong}</Text>
-                  <Text style={styles.total}>Tổng: {item.tongGia} đ</Text>
+                  <Text style={styles.total}>Tổng: {formatPrice(item.tongGia)} đ</Text>
                 </View>
               </View>
             )}
           />
           <View style={styles.footer}>
-            <Text style={styles.totalLabel}>Tổng cộng:</Text>
-            <Text style={styles.totalValue}>{getTotal()} đ</Text>
+            <View style={styles.totalInfo}>
+              <Text style={styles.totalLabel}>Tổng cộng:</Text>
+              <Text style={styles.totalValue}>{formatPrice(getTotal())} đ</Text>
+            </View>
+            <TouchableOpacity style={styles.checkoutButton} onPress={handleCheckout}>
+              <Text style={styles.checkoutButtonText}>Thanh toán</Text>
+            </TouchableOpacity>
           </View>
         </>
       ) : (
@@ -121,13 +150,27 @@ const styles = StyleSheet.create({
     padding: 16,
     backgroundColor: '#fff',
     borderRadius: 12,
+    elevation: 2,
+  },
+  totalInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    elevation: 2,
+    marginBottom: 16,
   },
   totalLabel: { fontSize: 18, fontWeight: 'bold', color: '#000d66' },
   totalValue: { fontSize: 18, fontWeight: 'bold', color: '#ff4444' },
+  checkoutButton: {
+    backgroundColor: '#ff4444',
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  checkoutButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
   emptyText: { fontSize: 16, color: '#888', textAlign: 'center', marginTop: 40 },
 });
 

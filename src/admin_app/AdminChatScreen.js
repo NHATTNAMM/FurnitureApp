@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import {
   View,
   Text,
@@ -10,15 +10,22 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  StatusBar,
+  TouchableWithoutFeedback,
+  Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import {
   getAllUserChats,
   loadChatMessages,
   sendAdminMessage,
 } from '../Firebase/ChatAPI';
+import { UserContext } from '../Firebase/UserContext';
+import { LogOut } from '../Firebase/FirebaseAPI';
 
 const AdminChatScreen = ({ navigation }) => {
+  const { user } = useContext(UserContext);
   const [chats, setChats] = useState([]);
   const [selectedChat, setSelectedChat] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -26,14 +33,104 @@ const AdminChatScreen = ({ navigation }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
+  const [sidebar, setSidebar] = useState(false);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const flatListRef = React.useRef(null);
+
+  // Menu items tương tự như AdminScreen
+  const menuItem = [
+    { key: '1', label: 'Thống kê' },
+    { key: '2', label: 'Khách hàng' },
+    { key: '3', label: 'Sản phẩm' },
+    { key: '4', label: 'Đơn hàng' },
+    { key: '5', label: 'Cập nhật thông tin cửa hàng' },
+    { key: '7', label: 'Quản lý Chat' },
+    { key: '6', label: 'Đăng xuất' },
+  ];
 
   useEffect(() => {
+    // Kiểm tra quyền admin
+    if (!user || user.role !== 'admin') {
+      Alert.alert(
+        "Không có quyền truy cập",
+        "Bạn không có quyền truy cập trang này",
+        [
+          {
+            text: "OK",
+            onPress: () => navigation.reset({
+              index: 0,
+              routes: [{ name: 'LogIn' }],
+            })
+          }
+        ]
+      );
+      return;
+    }
+
     loadChats();
     
     // Reload chats every 30 seconds
     const interval = setInterval(loadChats, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [user, navigation]);
+
+  const handleLogOut = () => {
+    Alert.alert("Xác nhận", "Bạn có chắc muốn đăng xuất?", [
+      {
+        text: "Hủy",
+        style: "cancel",
+      },
+      {
+        text: "Đăng xuất",
+        onPress: async () => {
+          const result = await LogOut();
+          if (result.success) {
+            navigation.reset({
+              index: 0,
+              routes: [{ name: "LogIn" }],
+            });
+          } else {
+            Alert.alert("Lỗi", "Không thể đăng xuất. Vui lòng thử lại!");
+          }
+        }
+      }
+    ]);
+  };
+
+  const handleMenuPress = (key) => {
+    setSidebar(false);
+    
+    switch (key) {
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+        navigation.navigate('AdminHome');
+        break;
+      case '6':
+        handleLogOut();
+        break;
+      case '7':
+        // Đã ở trang chat rồi, không cần làm gì
+        break;
+      default:
+        break;
+    }
+  };
+
+  const getIconName = (key) => {
+    switch (key) {
+      case '1': return 'stats-chart';
+      case '2': return 'people';
+      case '3': return 'cube';
+      case '4': return 'receipt';
+      case '5': return 'business';
+      case '7': return 'chatbubbles';
+      case '6': return 'log-out';
+      default: return 'square';
+    }
+  };
 
   const loadChats = async () => {
     setIsLoading(true);
@@ -48,13 +145,26 @@ const AdminChatScreen = ({ navigation }) => {
     setSelectedChat(chat);
     setModalVisible(true);
     
-    // Load messages
-    const unsubscribe = loadChatMessages(chat.userId, setMessages);
+    // Load messages - Reverse để tin mới nhất ở trên cùng
+    const unsubscribe = loadChatMessages(chat.userId, (loadedMessages) => {
+      setMessages([...loadedMessages].reverse());
+    });
     
     // Cleanup
     return () => {
       if (unsubscribe) unsubscribe();
     };
+  };
+
+  const scrollToBottom = () => {
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    setShowScrollButton(false);
+  };
+
+  const handleScroll = (event) => {
+    const { contentOffset } = event.nativeEvent;
+    // Show button when scrolled up more than 100px
+    setShowScrollButton(contentOffset.y > 100);
   };
 
   const handleSendMessage = async () => {
@@ -88,7 +198,7 @@ const AdminChatScreen = ({ navigation }) => {
       </View>
       
       <View style={styles.chatInfo}>
-        <Text style={styles.userName}>{item.userName}</Text>
+        <Text style={styles.chatUserName}>{item.userName}</Text>
         <Text style={styles.userEmail}>{item.userEmail}</Text>
         <Text style={styles.lastMessage} numberOfLines={1}>
           {item.lastMessage}
@@ -189,43 +299,116 @@ const AdminChatScreen = ({ navigation }) => {
     );
   };
 
-  return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Quản lý Chat</Text>
-        <TouchableOpacity onPress={loadChats}>
-          <Ionicons name="refresh" size={24} color="#fff" />
-        </TouchableOpacity>
-      </View>
+  // Nếu không phải admin thì không render
+  if (!user || user.role !== 'admin') {
+    return null;
+  }
 
-      {/* Chat List */}
-      {isLoading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#000D66" />
-          <Text style={styles.loadingText}>Đang tải...</Text>
+  return (
+    <View style={styles.mainContainer}>
+      <StatusBar backgroundColor="#000d66" barStyle="light-content" />
+      <SafeAreaView style={styles.safeArea}>
+        {/* Header tương tự AdminScreen */}
+        <View style={styles.header}>
+          <TouchableOpacity 
+            style={styles.openBtn} 
+            onPress={() => setSidebar(true)}
+          >
+            <Ionicons name="menu" size={28} color="white" />
+          </TouchableOpacity>
+          <View style={styles.headerContent}>
+            <Text style={styles.headerTitle}>Quản lý Chat</Text>
+            <Text style={styles.headerSubtitle}>Quản lý hệ thống</Text>
+          </View>
+          <TouchableOpacity onPress={loadChats} style={styles.refreshBtn}>
+            <Ionicons name="refresh" size={24} color="#fff" />
+          </TouchableOpacity>
         </View>
-      ) : chats.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="chatbubbles-outline" size={80} color="#D1D5DB" />
-          <Text style={styles.emptyText}>Chưa có tin nhắn nào</Text>
+
+        <View style={styles.container}>
+          {/* Sidebar overlay */}
+          {sidebar && 
+            <TouchableWithoutFeedback onPress={() => setSidebar(false)}>
+              <View style={styles.overPlay}></View>
+            </TouchableWithoutFeedback>
+          }
+          
+          {/* Sidebar */}
+          {sidebar && (
+            <View style={styles.sidebar}>
+              <View style={styles.sidebarHeader}>
+                <View style={styles.userInfo}>
+                  <View style={styles.adminAvatarContainer}>
+                    <Text style={styles.avatarText}>
+                      {user?.fullName?.charAt(0)?.toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={styles.userDetails}>
+                    <Text style={styles.userName}>{user?.fullName}</Text>
+                    <Text style={styles.userRole}>Quản trị viên</Text>
+                  </View>
+                </View>
+                <TouchableOpacity 
+                  onPress={() => setSidebar(false)} 
+                  style={styles.closeBtn}
+                >
+                  <Ionicons name="close" size={24} color="white" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.menuContainer}>
+                {menuItem.map((item) => (
+                  <TouchableOpacity
+                    key={item.key}
+                    style={[
+                      styles.menuItem,
+                      item.key === '7' && styles.menuItemActive // Highlight chat menu
+                    ]}
+                    onPress={() => handleMenuPress(item.key)}
+                  >
+                    <Ionicons 
+                      name={getIconName(item.key)} 
+                      size={22} 
+                      color="white" 
+                    />
+                    <Text style={styles.menuText}>{item.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Content */}
+          <View style={styles.content}>
+            <View style={styles.contentContainer}>
+              {/* Chat List */}
+              {isLoading ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#000D66" />
+                  <Text style={styles.loadingText}>Đang tải...</Text>
+                </View>
+              ) : chats.length === 0 ? (
+                <View style={styles.emptyContainer}>
+                  <Ionicons name="chatbubbles-outline" size={80} color="#D1D5DB" />
+                  <Text style={styles.emptyText}>Chưa có tin nhắn nào</Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={chats}
+                  renderItem={renderChatItem}
+                  keyExtractor={(item) => item.userId}
+                  contentContainerStyle={styles.chatList}
+                />
+              )}
+            </View>
+          </View>
         </View>
-      ) : (
-        <FlatList
-          data={chats}
-          renderItem={renderChatItem}
-          keyExtractor={(item) => item.userId}
-          contentContainerStyle={styles.chatList}
-        />
-      )}
+      </SafeAreaView>
 
       {/* Chat Modal */}
       <Modal
         visible={modalVisible}
-        animationType="slide"
+        animationType="none"
         onRequestClose={() => setModalVisible(false)}
       >
         <KeyboardAvoidingView
@@ -249,13 +432,29 @@ const AdminChatScreen = ({ navigation }) => {
           </View>
 
           {/* Messages */}
-          <FlatList
-            data={messages}
-            renderItem={renderMessage}
-            keyExtractor={(item, index) => `${item.id || index}`}
-            contentContainerStyle={styles.messagesList}
-            inverted={false}
-          />
+          <View style={{ flex: 1 }}>
+            <FlatList
+              ref={flatListRef}
+              data={messages}
+              renderItem={renderMessage}
+              keyExtractor={(item, index) => `${item.id || index}`}
+              contentContainerStyle={styles.messagesList}
+              inverted={true}
+              onScroll={handleScroll}
+              scrollEventThrottle={16}
+            />
+
+            {/* Scroll to Bottom Button */}
+            {showScrollButton && (
+              <TouchableOpacity 
+                style={styles.scrollToBottomButton}
+                onPress={scrollToBottom}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="arrow-down" size={24} color="#fff" />
+              </TouchableOpacity>
+            )}
+          </View>
 
           {/* Input */}
           <View style={styles.inputContainer}>
@@ -289,45 +488,167 @@ const AdminChatScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
+  mainContainer: {
     flex: 1,
-    backgroundColor: '#F3F4F6', // Light gray background
+    backgroundColor: '#f5f5f5',
+  },
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#000d66',
   },
   header: {
+    height: 70,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 15,
-    paddingTop: 20,
-    paddingBottom: 15,
-    backgroundColor: '#000D66', // Navy Blue (main color)
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 5,
+    backgroundColor: '#000d66',
+  },
+  headerContent: {
+    flex: 1,
+    marginLeft: 15,
   },
   headerTitle: {
+    color: 'white',
+    fontSize: 22,
+    fontWeight: '600',
+  },
+  headerSubtitle: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 14,
+    marginTop: 2,
+  },
+  openBtn: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  refreshBtn: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  container: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  sidebar: {
+    width: '75%',
+    backgroundColor: '#000d66',
+    position: 'absolute',
+    zIndex: 10,
+    left: 0,
+    top: 0,
+    bottom: 0,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  sidebarHeader: {
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  adminAvatarContainer: {
+    width: 45,
+    height: 45,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  avatarText: {
+    color: 'white',
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
+    fontWeight: '600',
+  },
+  userDetails: {
+    flex: 1,
+  },
+  userName: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  userRole: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 14,
+    marginTop: 2,
+  },
+  closeBtn: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  menuContainer: {
+    padding: 15,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    borderRadius: 10,
+    marginBottom: 8,
+  },
+  menuItemActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderLeftWidth: 4,
+    borderLeftColor: '#ffffff',
+  },
+  menuText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '500',
+    marginLeft: 12,
+  },
+  overPlay: {
+    position: 'absolute',
+    zIndex: 1,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  content: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  contentContainer: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
   },
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#000D66', // Navy Blue
+    color: '#000D66',
     fontWeight: '500',
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#f5f5f5',
+    padding: 20,
   },
   emptyText: {
     marginTop: 20,
@@ -377,7 +698,7 @@ const styles = StyleSheet.create({
   chatInfo: {
     flex: 1,
   },
-  userName: {
+  chatUserName: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#1F2937', // Dark gray
@@ -411,7 +732,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingTop: 20,
     paddingBottom: 15,
-    backgroundColor: '#000D66', // Navy Blue (main color)
+    backgroundColor: '#000D66',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
@@ -429,7 +750,7 @@ const styles = StyleSheet.create({
   },
   modalHeaderSubtitle: {
     fontSize: 13,
-    color: '#E0E7FF', // Light navy
+    color: '#E0E7FF',
     marginTop: 2,
   },
   headerSpacer: {
@@ -553,7 +874,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 40,
     maxHeight: 100,
-    backgroundColor: '#F3F4F6', // Light gray
+    backgroundColor: '#F3F4F6',
     borderRadius: 20,
     paddingHorizontal: 15,
     paddingVertical: 10,
@@ -567,7 +888,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#000D66', // Navy Blue
+    backgroundColor: '#000D66',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000D66',
@@ -577,8 +898,25 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   sendButtonDisabled: {
-    backgroundColor: '#9CA3AF', // Gray when disabled
+    backgroundColor: '#9CA3AF',
     opacity: 0.6,
+  },
+  scrollToBottomButton: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#000D66',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
+    zIndex: 1000,
   },
 });
 

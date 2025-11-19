@@ -15,7 +15,7 @@ const Cart = ({ navigation }) => {
   const { user } = useContext(UserContext);
   const [cart, setCart] = useState([]);
   const [selectedStatus, setSelectedStatus] = useState('Chờ xác nhận');
-  const statusList = ['Chờ xác nhận', 'Chờ giao hàng', 'Đang giao', 'Đã đặt'];
+  const statusList = ['Chờ xác nhận', 'Chờ giao hàng', 'Đang giao', 'Đã đặt', 'Đã hủy'];
   const [selectedItems, setSelectedItems] = useState(new Set());
   const [isFirstLoad, setIsFirstLoad] = useState(true);
 
@@ -187,6 +187,8 @@ const Cart = ({ navigation }) => {
         return '#28A745';
       case 'Đã đặt':
         return '#6C757D';
+      case 'Đã hủy':
+        return '#E53935';
       default:
         return PRIMARY;
     }
@@ -254,41 +256,12 @@ const Cart = ({ navigation }) => {
         return;
     }
 
-    try {
-        const groupedOrder = {
-            items: ordersToCheckout.map(item => ({
-                furnitureItem: {
-                    furnitureName: item.furnitureItem.furnitureName || 'Tên sản phẩm',
-                    ...item.furnitureItem
-                },
-                soLuong: item.soLuong || 0,
-                tongGia: item.tongGia || 0
-            })),
-            totalAmount: ordersToCheckout.reduce((sum, item) => sum + (item.tongGia || 0), 0),
-            createdAt: new Date(),
-            status: 'Chờ giao hàng',
-            userId: user.id
-        };
-
-        const result = await checkoutOrders(user.id, [groupedOrder]);
-
-        if (result.success) {
-            Alert.alert("Thông báo", result.message);
-            // Clear selected items after successful checkout
-            setSelectedItems(new Set());
-            loadCartRealTime(user.id, (cartData) => {
-                if (cartData) {
-                    setCart(cartData);
-                }
-            });
-        } else {
-            Alert.alert("Thông báo", result.message);
-        }
-    } catch (error) {
-        console.error("Lỗi khi thanh toán:", error.message);
-        Alert.alert("Thông báo", "Đã xảy ra lỗi khi thanh toán!");
-    }
-};
+    // Navigate to payment screen with selected items
+    navigation.navigate('PaymentScreen', { 
+      selectedItems: ordersToCheckout,
+      totalAmount: ordersToCheckout.reduce((sum, item) => sum + (item.tongGia || 0), 0)
+    });
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: SECONDARY }}>

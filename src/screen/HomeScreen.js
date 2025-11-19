@@ -186,9 +186,9 @@ const HomeScreen = () => {
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-          {/* Animated Header */}
-          <Animated.View style={[styles.header, { height: headerHeight }]}>
-          <View style={styles.headerTop}>
+          {/* Fixed Header */}
+          <View style={styles.header}>
+            <View style={styles.headerTop}>
               <TouchableOpacity 
                 style={styles.locationContainer} 
                 onPress={() => setAddressModalVisible(true)}
@@ -199,19 +199,18 @@ const HomeScreen = () => {
                 </Text>
                 <Ionicons name="chevron-forward" size={20} color="#000D66" />
               </TouchableOpacity>
-              {/* Đã ẩn icon giỏ hàng ở header */}
-          </View>
+            </View>
 
-          <TouchableOpacity 
-            style={styles.searchBar}
-            onPress={() => navigation.navigate('SearchScreen')}
-          >
+            <TouchableOpacity 
+              style={styles.searchBar}
+              onPress={() => navigation.navigate('SearchScreen')}
+            >
               <Feather name="search" size={20} color="#666" style={styles.searchIcon} />
               <Text style={styles.searchText}>Tìm kiếm sản phẩm...</Text>
-          </TouchableOpacity>
-          </Animated.View>
+            </TouchableOpacity>
+          </View>
 
-        {/* Categories Section */}
+        {/* Fixed Categories */}
         <View style={styles.categoriesContainer}>
           <FlatList
             horizontal
@@ -243,16 +242,11 @@ const HomeScreen = () => {
           />
         </View>
 
-        {/* Content Section */}
-          <Animated.ScrollView 
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.scrollViewContent}
-            onScroll={Animated.event(
-              [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-              { useNativeDriver: false }
-            )}
-            scrollEventThrottle={16}
-          >
+        {/* Scrollable Content */}
+        <ScrollView 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollViewContent}
+        >
             <View style={styles.favorite}>
               <TagComponent />
             </View>
@@ -344,7 +338,7 @@ const HomeScreen = () => {
                 )
               )}
             </View>
-          </Animated.ScrollView>
+          </ScrollView>
 
         {selectedFurniture && (
           <FurnitureItem
@@ -395,15 +389,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 20,
     paddingTop: 15,
-    borderBottomWidth: 0,
-    elevation: 0,
-    overflow: 'hidden',
+    paddingBottom: 15,
   },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: 12,
   },
   locationContainer: {
     flexDirection: 'row',
@@ -452,8 +444,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
     borderRadius: 30,
     paddingHorizontal: 20,
-    height: 50,
-    marginBottom: 10,
+    height: 48,
   },
   searchIcon: {
     marginRight: 10,
@@ -465,8 +456,9 @@ const styles = StyleSheet.create({
   },
   categoriesContainer: {
     backgroundColor: '#FFFFFF',
-    paddingVertical: 15,
-    borderBottomWidth: 0,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
   },
   categoriesList: {
     paddingHorizontal: 20,
@@ -497,7 +489,8 @@ const styles = StyleSheet.create({
   },
   favorite: {
     paddingHorizontal: 20,
-    paddingVertical: 15,
+    paddingTop: 15,
+    paddingBottom: 10,
   },
   furnitureContainer: {
     paddingHorizontal: 20,

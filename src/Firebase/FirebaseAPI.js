@@ -76,37 +76,73 @@ export const signInUser =  async ({email,password,fullName,phone,address}) =>{
     }
 }
 export const LogIn = async ({email,password})=>{
-    
     try{
-        const userGG = await signInWithEmailAndPassword (auth,email,password);
+        console.log('Attempting login with email:', email); // Debug log
+        
+        // Đảm bảo email được trim để tránh khoảng trắng
+        const cleanEmail = email.trim().toLowerCase();
+        
+        const userGG = await signInWithEmailAndPassword(auth, cleanEmail, password);
         const user = userGG.user;
+        
+        console.log('Firebase auth successful, user UID:', user.uid); // Debug log
 
-        const userDoc = await getDoc(doc(db,"User",user.uid))
+        // Lấy user document từ Firestore
+        const userDoc = await getDoc(doc(db,"User",user.uid));
         if(userDoc.exists()){
             const userData = userDoc.data();
-            const role = userData.role
+            const role = userData.role;
+            
+            console.log('User data retrieved, role:', role); // Debug log
+            
+            // Đảm bảo role được trả về chính xác
+            if (!role) {
+                console.log('Warning: No role found for user, defaulting to "user"');
+                return { success: true , user: { id: user.uid, role: "user", ...userData } };
+            }
+            
+            // Đăng nhập thành công, trả về thông tin user
             return { success: true , user: { id: user.uid, role, ...userData } };
         }
         else{
+            console.log('User document not found in Firestore'); // Debug log
+            // Logout ngay lập tức nếu không tìm thấy user document
+            await auth.signOut();
             return{success:false, error :"Tài khoản hoặc mật khẩu không tồn tại" };
-
         }
-
-
-       
     }
     catch (error) {
-    console.error("Login error: ", error.message);
-    if (error.code === 'auth/wrong-password') {
-        return { success: false, error: 'Sai mật khẩu, vui lòng thử lại!' };
-      }
-      
-      if (error.code === 'auth/user-not-found') {
-        return { success: false, error: 'Tài khoản không tồn tại!' };
-      }
-      return { success: false, error: 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin!' };
+        console.error("Login error: ", error.code, error.message);
+        
+        // Đảm bảo user bị logout nếu có lỗi
+        try {
+            await auth.signOut();
+        } catch (signOutError) {
+            console.error("Error signing out:", signOutError);
+        }
+        
+        if (error.code === 'auth/wrong-password') {
+            return { success: false, error: 'Sai mật khẩu, vui lòng thử lại!' };
+        }
+        
+        if (error.code === 'auth/user-not-found') {
+            return { success: false, error: 'Tài khoản không tồn tại!' };
+        }
+        
+        if (error.code === 'auth/invalid-email') {
+            return { success: false, error: 'Email không hợp lệ!' };
+        }
+        
+        if (error.code === 'auth/invalid-credential') {
+            return { success: false, error: 'Tài khoản hoặc mật khẩu không đúng!' };
+        }
+        
+        if (error.code === 'auth/too-many-requests') {
+            return { success: false, error: 'Quá nhiều lần thử. Vui lòng đợi và thử lại sau!' };
+        }
+        
+        return { success: false, error: 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin!' };
     }
-  
 }
 export const LogOut  = async ()=>{
     // const { setUser } = useContext(UserContext);
@@ -276,7 +312,13 @@ export const addToCart = async (userId, { furnitureItem, soLuong, tongGia }) => 
             }
             if (!found) {
                 if (furnitureItem) {
-                    cart.push({ furnitureItem, soLuong, tongGia: soLuong * finalPrice });
+                    // Thêm sản phẩm mới vào ĐẦU array để hiển thị mới nhất trên cùng
+                    cart.unshift({ 
+                        furnitureItem, 
+                        soLuong, 
+                        tongGia: soLuong * finalPrice,
+                        addedAt: new Date().getTime() // Thêm timestamp để sắp xếp
+                    });
                 }
             }
             await updateDoc(userReference, {
@@ -454,16 +496,27 @@ export const checkoutOrders = async (userId, ordersToCheckout) => {
                     tongGia: item.tongGia
                 })),
                 deliveryAddress,
-                status: "Chờ giao hàng",
-                createdAt: new Date(),
+                status: ordersToCheckout[0].status || "Chờ giao hàng",
+                createdAt: ordersToCheckout[0].createdAt || new Date(),
                 updatedAt: new Date(),
                 userId,
-                totalAmount: ordersToCheckout[0].totalAmount
+                totalAmount: ordersToCheckout[0].totalAmount,
+                // Thêm thông tin thanh toán
+                paymentMethod: ordersToCheckout[0].paymentMethod || 'cod',
+                paymentStatus: ordersToCheckout[0].paymentStatus || 'pending'
             };
 
             // Lưu đơn hàng vào collection "orders"
             const orderRef = doc(collection(db, "orders"));
             batch.set(orderRef, newOrder);
+
+            // Log thông tin đơn hàng để debug
+            console.log("=== CHECKOUT ORDER ===");
+            console.log("Payment Method:", newOrder.paymentMethod);
+            console.log("Payment Status:", newOrder.paymentStatus);
+            console.log("Total Amount:", newOrder.totalAmount);
+            console.log("Order Status:", newOrder.status);
+            console.log("======================");
 
             // Xóa giỏ hàng của người dùng
             batch.update(userReference, {
@@ -506,11 +559,24 @@ export const getOverviewStats = async () => {
     let deliveringOrders = 0;
     let completedOrders = 0;
     
+    // Thống kê thanh toán
+    let codOrders = 0;
+    let qrOrders = 0;
+    let ewalletOrders = 0;
+    let onlineOrders = 0;
+    let paidOrders = 0;
+    let unpaidOrders = 0;
+    
     // Khởi tạo mảng thống kê theo ngày
     const today = new Date();
     const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     const dailyStats = Array(31).fill(0); // Mảng lưu số đơn hàng mỗi ngày
     const dailyRevenue = Array(31).fill(0); // Mảng lưu doanh thu mỗi ngày
+    
+    // Khởi tạo mảng thống kê theo tháng
+    const firstDayOfYear = new Date(today.getFullYear(), 0, 1);
+    const monthlyStats = Array(12).fill(0); // Mảng lưu số đơn hàng mỗi tháng
+    const monthlyRevenue = Array(12).fill(0); // Mảng lưu doanh thu mỗi tháng
     
     ordersSnapshot.forEach((doc) => {
       const orderData = doc.data();
@@ -535,12 +601,37 @@ export const getOverviewStats = async () => {
           break;
       }
       
-      // Thống kê theo ngày
+      // Thống kê thanh toán
+      if (orderData.paymentMethod === 'cod') {
+        codOrders++;
+      } else if (orderData.paymentMethod === 'qr') {
+        qrOrders++;
+        onlineOrders++;
+      } else if (orderData.paymentMethod === 'ewallet') {
+        ewalletOrders++;
+        onlineOrders++;
+      }
+      
+      if (orderData.paymentStatus === 'completed') {
+        paidOrders++;
+      } else if (orderData.paymentStatus === 'pending') {
+        unpaidOrders++;
+      }
+      
       const orderDate = orderData.createdAt?.toDate();
+      
+      // Thống kê theo ngày
       if (orderDate && orderDate >= firstDayOfMonth && orderDate <= today) {
         const dayIndex = orderDate.getDate() - 1;
         dailyStats[dayIndex]++;
         dailyRevenue[dayIndex] += orderData.totalAmount || 0;
+      }
+      
+      // Thống kê theo tháng
+      if (orderDate && orderDate.getFullYear() === today.getFullYear()) {
+        const monthIndex = orderDate.getMonth();
+        monthlyStats[monthIndex]++;
+        monthlyRevenue[monthIndex] += orderData.totalAmount || 0;
       }
     });
 
@@ -563,8 +654,17 @@ export const getOverviewStats = async () => {
         readyOrders,
         deliveringOrders,
         completedOrders,
+        // Payment statistics
+        codOrders,
+        qrOrders,
+        ewalletOrders,
+        onlineOrders,
+        paidOrders,
+        unpaidOrders,
         dailyStats: dailyStats.slice(0, today.getDate()), // Chỉ lấy đến ngày hiện tại
         dailyRevenue: dailyRevenue.slice(0, today.getDate()), // Chỉ lấy đến ngày hiện tại
+        monthlyStats: monthlyStats.slice(0, today.getMonth() + 1), // Chỉ lấy đến tháng hiện tại
+        monthlyRevenue: monthlyRevenue.slice(0, today.getMonth() + 1), // Chỉ lấy đến tháng hiện tại
       },
     };
   } catch (error) {
@@ -703,16 +803,30 @@ export const updateOrderStatus = async (orderId, newStatus) => {
 export const searchFurnitures = async (searchText) => {
   try {
     const furnituresRef = collection(db, "furnitures");
-    const q = query(
-      furnituresRef,
-      where("furnitureName", ">=", searchText),
-      where("furnitureName", "<=", searchText + "\uf8ff")
-    );
-    const querySnapshot = await getDocs(q);
-    const furnitures = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    const querySnapshot = await getDocs(furnituresRef);
+    
+    // Chuyển search text về lowercase để tìm kiếm không phân biệt hoa thường
+    const searchLower = searchText.toLowerCase().trim();
+    
+    // Filter kết quả phía client để tìm kiếm linh hoạt hơn
+    const furnitures = querySnapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      .filter(furniture => {
+        const nameLower = (furniture.furnitureName || '').toLowerCase();
+        const descLower = (furniture.description || '').toLowerCase();
+        const tagsLower = Array.isArray(furniture.tag) 
+          ? furniture.tag.map(t => t.toLowerCase()).join(' ')
+          : '';
+        
+        // Tìm trong tên, mô tả và tags
+        return nameLower.includes(searchLower) || 
+               descLower.includes(searchLower) ||
+               tagsLower.includes(searchLower);
+      });
+    
     return { success: true, data: furnitures };
   } catch (error) {
     console.error("Error searching furnitures:", error);
