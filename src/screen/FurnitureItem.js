@@ -9,7 +9,7 @@ import GlassDiscountBadge from '../component/GlassDiscountBadge';
 import StarRating from '../component/StarRating';
 import ReviewList from '../component/ReviewList';
 import ProductReview from '../component/ProductReview';
-import { calculateDiscountedPrice, getReviewStats } from '../Firebase/FirebaseAPI';
+import { calculateDiscountedPrice, getReviewStats, getSimilarProducts } from '../Firebase/FirebaseAPI';
 
 const { width } = Dimensions.get('window');
 
@@ -19,6 +19,10 @@ const FurnitureItem = ({ visible, furnitureItem, userId, onClose, onAddToCart })
   const [reviewStats, setReviewStats] = useState(null);
   const [showAllReviews, setShowAllReviews] = useState(false);
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+  const [similarProducts, setSimilarProducts] = useState([]);
+  const [selectedSimilarProduct, setSelectedSimilarProduct] = useState(null);
+  const [showSimilarModal, setShowSimilarModal] = useState(false);
+  const [showAllTags, setShowAllTags] = useState(false);
   const maxQuantity = furnitureItem.quantity || 0;
   
   // Tính giá cuối cùng (sau khi giảm giá nếu có)
@@ -27,6 +31,7 @@ const FurnitureItem = ({ visible, furnitureItem, userId, onClose, onAddToCart })
   useEffect(() => {
     if (visible && furnitureItem?.id) {
       loadReviewStats();
+      loadSimilarProducts();
       
       // Auto refresh every 10 seconds when modal is open
       const interval = setInterval(() => {
@@ -47,6 +52,21 @@ const FurnitureItem = ({ visible, furnitureItem, userId, onClose, onAddToCart })
       }
     } catch (error) {
       console.error('Error loading review stats:', error);
+    }
+  };
+
+  const loadSimilarProducts = async () => {
+    try {
+      const result = await getSimilarProducts({
+        id: furnitureItem.id,
+        tag: furnitureItem.tag,
+        furniturePrice: furnitureItem.furniturePrice
+      });
+      if (result.success) {
+        setSimilarProducts(result.data);
+      }
+    } catch (error) {
+      console.error('Error loading similar products:', error);
     }
   };
 
@@ -80,6 +100,39 @@ const FurnitureItem = ({ visible, furnitureItem, userId, onClose, onAddToCart })
 
   const shouldShowReadMore = () => {
     return furnitureItem.description && furnitureItem.description.length > 50;
+  };
+
+  const handleSimilarProductPress = (product) => {
+    setSelectedSimilarProduct(product);
+    setShowSimilarModal(true);
+  };
+
+  const handleCloseSimilarModal = () => {
+    setShowSimilarModal(false);
+    setSelectedSimilarProduct(null);
+  };
+
+  const renderCompactTags = () => {
+    const tags = furnitureItem.tag || [];
+    if (tags.length === 0) return null;
+    
+    const displayTags = tags.slice(0, 2);
+    const remainingCount = tags.length - 2;
+    const tagsText = displayTags.join(', ');
+    
+    return (
+      <TouchableOpacity 
+        style={styles.compactTagContainer}
+        onPress={() => setShowAllTags(true)}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="pricetag-outline" size={14} color="#000D66" />
+        <Text style={styles.compactTagText} numberOfLines={1}>
+          {tagsText}
+          {remainingCount > 0 && ` +${remainingCount}`}
+        </Text>
+      </TouchableOpacity>
+    );
   };
 
   useEffect(() => {
@@ -124,20 +177,14 @@ const FurnitureItem = ({ visible, furnitureItem, userId, onClose, onAddToCart })
             <View style={styles.contentContainer}>
               <Text style={styles.modalTitle}>{furnitureItem.furnitureName}</Text>
               
-              <View style={styles.priceContainer}>
+              <View style={styles.priceTagRow}>
                 <PriceDisplay 
                   originalPrice={furnitureItem.furniturePrice}
                   discountPercentage={furnitureItem.discountPercentage}
                   fontSize={22}
                   style={styles.priceDisplay}
                 />
-                <View style={styles.tagContainer}>
-                  {furnitureItem.tag && furnitureItem.tag.map((tag, index) => (
-                    <View key={index} style={styles.tag}>
-                      <Text style={styles.tagText}>{tag}</Text>
-                </View>
-                  ))}
-              </View>
+                {renderCompactTags()}
               </View>
 
             {/* Product Description Section */}
@@ -233,6 +280,48 @@ const FurnitureItem = ({ visible, furnitureItem, userId, onClose, onAddToCart })
                 onShowAll={() => setShowAllReviews(true)}
               />
             </View>
+
+            {/* Similar Products Section */}
+            {similarProducts.length > 0 && (
+              <View style={styles.similarSection}>
+                <Text style={styles.similarTitle}>Sản phẩm tương tự</Text>
+                <View style={styles.similarGrid}>
+                  {similarProducts.map((item, index) => (
+                    <TouchableOpacity 
+                      key={item.id} 
+                      style={styles.similarCard}
+                      onPress={() => handleSimilarProductPress(item)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.similarImageContainer}>
+                        <Image 
+                          source={{ uri: item.image || item.furnitureImage }} 
+                          style={styles.similarImage}
+                        />
+                        {item.discountPercentage > 0 && (
+                          <View style={styles.similarDiscountBadge}>
+                            <Text style={styles.similarDiscountText}>-{item.discountPercentage}%</Text>
+                          </View>
+                        )}
+                        {item.quantity === 0 && (
+                          <View style={styles.similarOutOfStockOverlay}>
+                            <Text style={styles.similarOutOfStockText}>Hết hàng</Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.similarInfo}>
+                        <Text style={styles.similarName} numberOfLines={2}>{item.furnitureName}</Text>
+                        <PriceDisplay 
+                          originalPrice={item.furniturePrice}
+                          discountPercentage={item.discountPercentage}
+                          fontSize={13}
+                        />
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
           </ScrollView>
 
           {/* Fixed Bottom Bar - Total and Add to Cart */}
@@ -268,6 +357,44 @@ const FurnitureItem = ({ visible, furnitureItem, userId, onClose, onAddToCart })
             furnitureId={furnitureItem.id}
             furnitureName={furnitureItem.furnitureName}
           />
+
+          {/* Similar Product Detail Modal */}
+          {selectedSimilarProduct && (
+            <FurnitureItem
+              visible={showSimilarModal}
+              furnitureItem={selectedSimilarProduct}
+              userId={userId}
+              onClose={handleCloseSimilarModal}
+              onAddToCart={onAddToCart}
+            />
+          )}
+
+          {/* All Tags Modal */}
+          <Modal
+            visible={showAllTags}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={() => setShowAllTags(false)}
+          >
+            <View style={styles.tagsModalOverlay}>
+              <View style={styles.tagsModalContent}>
+                <View style={styles.tagsModalHeader}>
+                  <Text style={styles.tagsModalTitle}>Loại sản phẩm</Text>
+                  <TouchableOpacity onPress={() => setShowAllTags(false)}>
+                    <Ionicons name="close" size={24} color="#666" />
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.tagsModalList}>
+                  {furnitureItem.tag && furnitureItem.tag.map((tag, index) => (
+                    <View key={index} style={styles.tagBadge}>
+                      <Ionicons name="pricetag" size={14} color="#000D66" />
+                      <Text style={styles.tagBadgeText}>{tag}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </View>
+          </Modal>
         </View>
       </View>
     </Modal>
@@ -347,7 +474,7 @@ const styles = StyleSheet.create({
     color: '#000D66',
     marginBottom: 15,
   },
-  priceContainer: {
+  priceTagRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -356,26 +483,21 @@ const styles = StyleSheet.create({
   priceDisplay: {
     flex: 1,
   },
-  modalPrice: {
-    fontSize: 22,
-    color: '#000D66',
-    fontWeight: '600',
-  },
-  tagContainer: {
+  compactTagContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  tag: {
+    alignItems: 'center',
     backgroundColor: '#F3F4F6',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
-    marginLeft: 8,
+    maxWidth: '40%',
+    borderWidth: 0,
   },
-  tagText: {
-    color: '#000D66',
+  compactTagText: {
     fontSize: 12,
+    color: '#000D66',
     fontWeight: '500',
+    marginLeft: 4,
   },
   modalDescription: {
     fontSize: 15,
@@ -479,7 +601,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 15,
     borderTopWidth: 1,
-    borderBottomWidth: 1,
     borderColor: '#E5E7EB',
     marginBottom: 25,
   },
@@ -599,7 +720,139 @@ const styles = StyleSheet.create({
   reviewsSectionTitle: {
     fontSize: 18,
     fontWeight: '600',
+    color: '#000D66',
+  },
+  tagsModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  tagsModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '80%',
+  },
+  tagsModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  tagsModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
     color: '#333',
+  },
+  tagsModalList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  tagBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 0,
+  },
+  tagBadgeText: {
+    fontSize: 14,
+    color: '#000D66',
+    fontWeight: '500',
+    marginLeft: 6,
+  },
+  similarSection: {
+    marginTop: 24,
+    paddingHorizontal: 16,
+    marginBottom: 20,
+  },
+  similarTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000D66',
+    marginBottom: 16,
+  },
+  similarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  similarCard: {
+    width: (width - 48) / 2,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+  },
+  similarImageContainer: {
+    position: 'relative',
+    width: '100%',
+    height: 140,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#F8F9FA',
+  },
+  similarImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  similarDiscountBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#FF5722',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  similarDiscountText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  similarOutOfStockOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  similarOutOfStockText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  similarInfo: {
+    padding: 12,
+  },
+  similarName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+    height: 40,
+    lineHeight: 20,
   },
 });
 

@@ -85,33 +85,62 @@ const ReviewList = ({
     });
   };
 
-  const renderReviewItem = ({ item }) => (
-    <View style={styles.reviewItem}>
-      <View style={styles.reviewHeader}>
-        <View style={styles.userAvatar}>
-          <Ionicons name="person-circle" size={28} color="#007AFF" />
-        </View>
-        <View style={styles.userInfo}>
-          <View style={styles.userNameRow}>
-            <Text style={styles.userName} numberOfLines={1}>
-              {item.userName || 'Khách hàng'}
-            </Text>
-            <View style={styles.ratingContainer}>
-              <StarRating rating={item.rating} size={12} />
-              <Text style={styles.ratingText}>({item.rating})</Text>
-            </View>
+  const [expandedReviews, setExpandedReviews] = useState({});
+
+  const toggleExpanded = (reviewId) => {
+    setExpandedReviews(prev => ({
+      ...prev,
+      [reviewId]: !prev[reviewId]
+    }));
+  };
+
+  const renderReviewItem = ({ item }) => {
+    const isExpanded = expandedReviews[item.id];
+    const shouldShowToggle = item.comment && item.comment.length > 150;
+
+    return (
+      <View style={styles.reviewItem}>
+        <View style={styles.reviewHeader}>
+          <View style={styles.userAvatar}>
+            <Ionicons name="person" size={20} color="#666" />
           </View>
-          <Text style={styles.reviewDate}>{formatDate(item.createdAt)}</Text>
-          
-          {item.comment && (
-            <Text style={styles.reviewComment} numberOfLines={4}>
+          <View style={styles.userInfo}>
+            <View style={styles.userNameRow}>
+              <Text style={styles.userName} numberOfLines={1}>
+                {item.userName || 'Khách hàng'}
+              </Text>
+              <View style={styles.ratingBadge}>
+                <Ionicons name="star" size={12} color="#FFB800" />
+                <Text style={styles.ratingText}>{item.rating}</Text>
+              </View>
+            </View>
+            <Text style={styles.reviewDate}>{formatDate(item.createdAt)}</Text>
+          </View>
+        </View>
+        
+        {item.comment && (
+          <>
+            <Text 
+              style={styles.reviewComment} 
+              numberOfLines={isExpanded ? undefined : 3}
+            >
               {item.comment}
             </Text>
-          )}
-        </View>
+            {shouldShowToggle && (
+              <TouchableOpacity 
+                onPress={() => toggleExpanded(item.id)}
+                style={styles.toggleButton}
+              >
+                <Text style={styles.toggleText}>
+                  {isExpanded ? 'Thu gọn' : 'Xem thêm'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </>
+        )}
       </View>
-    </View>
-  );
+    );
+  };
 
   const renderShowAllButton = () => {
     if (!showAllButton || totalReviews <= reviewLimit) return null;
@@ -176,27 +205,26 @@ const styles = StyleSheet.create({
     height: 12,
   },
   reviewItem: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#f5f5f5',
+    borderColor: '#E8E8E8',
   },
   reviewHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+    marginBottom: 10,
   },
   userAvatar: {
-    marginRight: 12,
-    marginTop: 2,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
   },
   userInfo: {
     flex: 1,
@@ -205,34 +233,43 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 3,
   },
   userName: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#333',
+    color: '#2C2C2C',
     flex: 1,
-  },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  ratingText: {
-    fontSize: 12,
-    color: '#666',
-    marginLeft: 4,
-    fontWeight: '500',
+    marginRight: 8,
   },
   reviewDate: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#999',
-    marginBottom: 8,
+  },
+  ratingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  ratingText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#2C2C2C',
   },
   reviewComment: {
     fontSize: 14,
-    color: '#555',
+    color: '#666',
     lineHeight: 20,
-    fontStyle: 'italic',
+    marginLeft: 46,
+  },
+  toggleButton: {
+    marginLeft: 46,
+    marginTop: 6,
+  },
+  toggleText: {
+    fontSize: 13,
+    color: '#007AFF',
+    fontWeight: '500',
   },
   showAllButton: {
     flexDirection: 'row',
@@ -241,7 +278,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 20,
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 20,
     borderWidth: 2,
     borderColor: '#007AFF',
     marginTop: 16,

@@ -336,7 +336,6 @@ const PaymentScreen = ({ navigation, route }) => {
           </View>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Thanh toán</Text>
-        <View style={styles.backButton} />
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -702,9 +701,8 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingTop: 40,
     paddingBottom: 15,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
@@ -724,6 +722,8 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#000D66',
+    flex: 1,
+    textAlign: 'center',
   },
   content: {
     flex: 1,

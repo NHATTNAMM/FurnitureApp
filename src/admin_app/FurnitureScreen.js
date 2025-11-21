@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, TouchableOpacity, Alert, Image, Modal, TextInput, ActivityIndicator } from 'react-native';
 import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import axios from 'axios';
 import { useNavigation } from '@react-navigation/native';
 import { titles } from '../globals/style';
 import { db } from '../Firebase/FirebaseConfig';
@@ -10,6 +12,9 @@ import StockStatus from '../component/StockStatus';
 import PriceDisplay from '../component/PriceDisplay';
 import DiscountBadge from '../component/DiscountBadge';
 import GlassDiscountBadge from '../component/GlassDiscountBadge';
+
+const CLOUD_NAME = 'dleidkd6p';
+const UPLOAD_PRESET = 'interiorapp';
 
 const FurnitureScreen = () => {
   const navigation  = useNavigation();
@@ -21,6 +26,7 @@ const FurnitureScreen = () => {
   const [editDesc, setEditDesc] = useState('');
   const [editQuantity, setEditQuantity] = useState('');
   const [editDiscount, setEditDiscount] = useState('');
+  const [editImage, setEditImage] = useState('');
   const [loadingEdit, setLoadingEdit] = useState(false);
 
   useEffect (()=> {
@@ -72,6 +78,7 @@ const FurnitureScreen = () => {
     setEditDesc(item.description);
     setEditQuantity(item.quantity ? item.quantity.toString() : '0');
     setEditDiscount(item.discountPercentage ? item.discountPercentage.toString() : '');
+    setEditImage(item.image || '');
     setEditModalVisible(true);
   };
 
@@ -83,6 +90,46 @@ const FurnitureScreen = () => {
     setEditDesc('');
     setEditQuantity('');
     setEditDiscount('');
+    setEditImage('');
+  };
+
+  const pickImage = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 1,
+      });
+
+      if (!result.canceled) {
+        setEditImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      Alert.alert('Lỗi', 'Không thể chọn ảnh');
+    }
+  };
+
+  const uploadImageToCloud = async (imageUri) => {
+    const data = new FormData();
+    data.append('file', {
+      uri: imageUri,
+      type: 'image/jpeg',
+      name: 'productImage.jpg',
+    });
+    data.append('upload_preset', UPLOAD_PRESET);
+
+    try {
+      const response = await axios.post(
+        `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
+        data,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      );
+      return response.data.secure_url;
+    } catch (error) {
+      console.error('Upload error:', error);
+      throw new Error('Không thể tải ảnh lên');
+    }
   };
 
   const handleSaveEdit = async () => {
@@ -115,11 +162,17 @@ const FurnitureScreen = () => {
         updateData.discountPercentage = null;
       }
 
+      // Nếu có ảnh mới và khác ảnh cũ, upload lên cloud
+      if (editImage && editImage !== editingItem.image && !editImage.startsWith('https://')) {
+        const uploadedUrl = await uploadImageToCloud(editImage);
+        updateData.image = uploadedUrl;
+      }
+
       await updateDoc(ref, updateData);
       Alert.alert('Thành công', 'Đã cập nhật sản phẩm!');
       closeEditModal();
     } catch (error) {
-      Alert.alert('Lỗi', 'Không thể cập nhật sản phẩm.');
+      Alert.alert('Lỗi', error.message || 'Không thể cập nhật sản phẩm.');
     } finally {
       setLoadingEdit(false);
     }
@@ -166,7 +219,9 @@ const FurnitureScreen = () => {
           fontSize={15}
           style={styles.priceContainer}
         />
-        <Text style={styles.itemDesc}>{item.description}</Text>
+        <Text style={styles.itemDesc} numberOfLines={2} ellipsizeMode="tail">
+          {item.description}
+        </Text>
         <StockStatus quantity={item.quantity} />
       </View>
     </View>
@@ -197,6 +252,36 @@ const FurnitureScreen = () => {
         <View style={{ flex:1, justifyContent:'center', alignItems:'center', backgroundColor:'rgba(0,0,0,0.3)' }}>
           <View style={{ width:300, backgroundColor:'#fff', borderRadius:16, padding:20, elevation:5 }}>
             <Text style={{ fontSize:18, fontWeight:'bold', color:'#000d66', marginBottom:10 }}>Chỉnh sửa sản phẩm</Text>
+            
+            {/* Image Picker */}
+            <TouchableOpacity 
+              onPress={pickImage}
+              style={{ 
+                borderWidth: 2, 
+                borderColor: '#000d66', 
+                borderRadius: 12, 
+                padding: 10, 
+                marginBottom: 10, 
+                alignItems: 'center',
+                backgroundColor: '#f4f8fc'
+              }}
+            >
+              {editImage ? (
+                <View style={{ alignItems: 'center' }}>
+                  <Image 
+                    source={{ uri: editImage }} 
+                    style={{ width: 100, height: 100, borderRadius: 8, marginBottom: 5 }} 
+                  />
+                  <Text style={{ color: '#000d66', fontSize: 12 }}>Nhấn để thay đổi ảnh</Text>
+                </View>
+              ) : (
+                <View style={{ alignItems: 'center' }}>
+                  <Ionicons name="image-outline" size={40} color="#000d66" />
+                  <Text style={{ color: '#000d66', marginTop: 5 }}>Chọn ảnh sản phẩm</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
             <TextInput
               placeholder="Tên sản phẩm"
               value={editName}
@@ -246,7 +331,7 @@ const FurnitureScreen = () => {
   );
 };
 
-export default FurnitureScreen
+export default FurnitureScreen;
 
 const styles = StyleSheet.create({
   container:{

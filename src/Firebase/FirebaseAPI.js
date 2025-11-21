@@ -1064,3 +1064,141 @@ export const getReviewStats = async (furnitureId) => {
         return { success: false, error: error.message };
     }
 }
+
+// Function to get similar products based on tags and price range
+export const getSimilarProducts = async (currentProduct) => {
+    try {
+        if (!currentProduct || !currentProduct.id) {
+            return { success: false, error: "Thiếu thông tin sản phẩm" };
+        }
+
+        const furnituresRef = collection(db, 'furnitures');
+        const querySnapshot = await getDocs(furnituresRef);
+
+        const allProducts = [];
+        querySnapshot.forEach((doc) => {
+            const productData = { id: doc.id, ...doc.data() };
+            // Loại bỏ sản phẩm hiện tại
+            if (productData.id !== currentProduct.id) {
+                allProducts.push(productData);
+            }
+        });
+
+        // Tính điểm tương đồng cho mỗi sản phẩm
+        const currentTags = currentProduct.tag || [];
+        const currentPrice = currentProduct.furniturePrice || 0;
+        const priceRange = currentPrice * 0.4; // 40% khoảng giá để linh hoạt hơn
+
+        const productsWithScore = allProducts.map(product => {
+            let score = 0;
+            const productTags = product.tag || [];
+            
+            // Điểm dựa trên tags chung (mỗi tag chung +20 điểm - tăng trọng số)
+            const commonTags = productTags.filter(tag => currentTags.includes(tag));
+            score += commonTags.length * 20;
+
+            // Điểm dựa trên khoảng giá gần nhau (trong vòng 40% giá thì +10 điểm)
+            const productPrice = product.furniturePrice || 0;
+            const priceDiff = Math.abs(productPrice - currentPrice);
+            if (priceDiff <= priceRange) {
+                // Càng gần giá càng nhiều điểm
+                const priceScore = 10 * (1 - priceDiff / priceRange);
+                score += priceScore;
+            }
+
+            // Ưu tiên sản phẩm còn hàng (+5 điểm)
+            if (product.quantity > 0) {
+                score += 5;
+            }
+
+            // Ưu tiên sản phẩm có giảm giá (+3 điểm)
+            if (product.discountPercentage > 0) {
+                score += 3;
+            }
+
+            return { ...product, similarityScore: score };
+        });
+
+        // Sắp xếp theo điểm tương đồng và lấy top 6
+        const similarProducts = productsWithScore
+            .filter(p => p.similarityScore > 0) // Chỉ lấy sản phẩm có điểm > 0
+            .sort((a, b) => b.similarityScore - a.similarityScore)
+            .slice(0, 6);
+
+        return {
+            success: true,
+            data: similarProducts
+        };
+    } catch (error) {
+        console.error("Lỗi khi lấy sản phẩm tương tự:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+// Get Best Selling Products based on actual order data
+export const getBestSellingProducts = async () => {
+    try {
+        // Lấy tất cả đơn hàng đã hoàn thành
+        const ordersRef = collection(db, 'orders');
+        const ordersQuery = query(ordersRef, where('status', 'in', ['Đã đặt', 'Đang giao', 'Chờ giao hàng']));
+        const ordersSnapshot = await getDocs(ordersQuery);
+
+        // Đếm số lượng bán của mỗi sản phẩm
+        const productSales = {};
+        
+        ordersSnapshot.forEach((doc) => {
+            const orderData = doc.data();
+            if (orderData.items && Array.isArray(orderData.items)) {
+                orderData.items.forEach(item => {
+                    const furnitureId = item.furnitureItem?.furnitureId || item.furnitureItem?.id;
+                    const quantity = item.soLuong || 0;
+                    
+                    if (furnitureId) {
+                        if (!productSales[furnitureId]) {
+                            productSales[furnitureId] = {
+                                id: furnitureId,
+                                totalSold: 0,
+                                productInfo: item.furnitureItem
+                            };
+                        }
+                        productSales[furnitureId].totalSold += quantity;
+                    }
+                });
+            }
+        });
+
+        // Lấy thông tin đầy đủ của các sản phẩm
+        const furnituresRef = collection(db, 'furnitures');
+        const furnituresSnapshot = await getDocs(furnituresRef);
+        
+        const furnituresMap = {};
+        furnituresSnapshot.forEach((doc) => {
+            furnituresMap[doc.id] = { id: doc.id, ...doc.data() };
+        });
+
+        // Tạo danh sách sản phẩm bán chạy với thông tin đầy đủ
+        const bestSellingList = Object.values(productSales)
+            .map(item => {
+                const fullProduct = furnituresMap[item.id];
+                return {
+                    id: item.id,
+                    name: fullProduct?.furnitureName || item.productInfo?.furnitureName || 'Sản phẩm',
+                    image: fullProduct?.image || fullProduct?.furnitureImage || item.productInfo?.image || item.productInfo?.furnitureImage,
+                    totalSold: item.totalSold,
+                    price: fullProduct?.furniturePrice || item.productInfo?.furniturePrice,
+                    discountPercentage: fullProduct?.discountPercentage || 0
+                };
+            })
+            .filter(item => item.image) // Chỉ lấy sản phẩm có ảnh
+            .sort((a, b) => b.totalSold - a.totalSold) // Sắp xếp theo số lượng bán giảm dần
+            .slice(0, 5); // Lấy top 5
+
+        return {
+            success: true,
+            data: bestSellingList
+        };
+    } catch (error) {
+        console.error("Lỗi khi lấy sản phẩm bán chạy:", error);
+        return { success: false, error: error.message };
+    }
+};

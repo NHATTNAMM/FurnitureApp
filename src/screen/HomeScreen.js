@@ -266,7 +266,7 @@ const HomeScreen = () => {
                       style={styles.furnitureCard}
                       onPress={() => openModal(item)}
                     >
-                      <View style={{ position: 'relative' }}>
+                      <View style={styles.imageContainer}>
                         <Image source={{ uri: item.image }} style={styles.furnitureImage} />
                         <OutOfStockBadge quantity={item.quantity} />
                         {/* Glass badge giảm giá góc trên bên phải */}
@@ -289,7 +289,7 @@ const HomeScreen = () => {
                           style={styles.priceContainer}
                         />
                         <View style={styles.tagContainer}>
-                          {Array.isArray(item.tag) && item.tag.map((tag, index) => (
+                          {Array.isArray(item.tag) && item.tag.slice(0, 2).map((tag, index) => (
                             <TouchableOpacity 
                               key={index} 
                               style={[
@@ -306,6 +306,11 @@ const HomeScreen = () => {
                               </Text>
                             </TouchableOpacity>
                           ))}
+                          {Array.isArray(item.tag) && item.tag.length > 2 && (
+                            <View style={styles.moreTagIndicator}>
+                              <Text style={styles.moreTagText}>+{item.tag.length - 2}</Text>
+                            </View>
+                          )}
                         </View>
                         
                       </View>
@@ -518,16 +523,25 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
     borderWidth: 0,
+    minHeight: 150,
   },
-  furnitureImage: {
+  imageContainer: {
     width: 120,
     height: 120,
+    position: 'relative',
     borderRadius: 15,
+    overflow: 'hidden',
+  },
+  furnitureImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 15,
+    resizeMode: 'cover',
   },
   furnitureInfo: {
     flex: 1,
     marginLeft: 15,
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
   },
   furnitureName: {
     fontSize: 16,
@@ -556,6 +570,7 @@ const styles = StyleSheet.create({
   tagContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    alignItems: 'center',
   },
   tag: {
     backgroundColor: '#F3F4F6',
@@ -576,6 +591,19 @@ const styles = StyleSheet.create({
   },
   selectedTagText: {
     color: '#fff',
+  },
+  moreTagIndicator: {
+    backgroundColor: '#E5E7EB',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginRight: 8,
+    marginBottom: 5,
+  },
+  moreTagText: {
+    fontSize: 11,
+    color: '#6B7280',
+    fontWeight: '600',
   },
   favoriteButton: {
     position: 'absolute',
