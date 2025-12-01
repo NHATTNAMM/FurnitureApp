@@ -1,10 +1,12 @@
 import React, { useState, useContext, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet, ScrollView } from 'react-native';
 import { fetchFurnitureStoreInfo, updateFurnitureStoreInfo } from '../Firebase/FirebaseAPI';
 import { UserContext } from '../Firebase/UserContext';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../Firebase/FirebaseConfig';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { refreshStoreLocationCache } from '../services/LocationService';
+import StoreLocationInfo from '../component/StoreLocationInfo';
 
 const UpdateFurnitureStoreScreen = () => {
     const { user } = useContext(UserContext); // Lấy thông tin user từ context
@@ -13,6 +15,7 @@ const UpdateFurnitureStoreScreen = () => {
     const [address, setAddress] = useState('');
     const [phone, setPhone] = useState('');
     const [ownerName, setOwnerName] = useState('');
+    const [refreshKey, setRefreshKey] = useState(0);
 
     const fetchStoreInfo = async () => {
         try {
@@ -57,7 +60,11 @@ const UpdateFurnitureStoreScreen = () => {
             });
 
             if (result.success) {
-                Alert.alert('Thành công', 'Cửa hàng nội thất đã được đăng ký/cập nhật thành công!');
+                // Refresh cache địa chỉ cửa hàng để tính phí vận chuyển chính xác
+                await refreshStoreLocationCache();
+                // Trigger re-render của StoreLocationInfo component
+                setRefreshKey(prev => prev + 1);
+                Alert.alert('Thành công', 'Cửa hàng nội thất đã được đăng ký/cập nhật thành công! Địa chỉ mới sẽ được áp dụng cho tính phí vận chuyển.');
             } else {
                 Alert.alert('Lỗi', result.error);
             }
@@ -68,7 +75,7 @@ const UpdateFurnitureStoreScreen = () => {
     };
 
     return (
-        <View style={styles.bg}>
+        <ScrollView style={styles.bg} showsVerticalScrollIndicator={false}>
           <View style={styles.card}>
             <MaterialCommunityIcons name="sofa" size={44} color="#000d66" style={{ alignSelf: 'center', marginBottom: 8 }} />
             <Text style={styles.title}>Cập nhật thông tin cửa hàng nội thất</Text>
@@ -103,7 +110,12 @@ const UpdateFurnitureStoreScreen = () => {
                 <Text style={styles.buttonText}>Cập nhật</Text>
             </TouchableOpacity>
           </View>
-        </View>
+          
+          {/* Hiển thị thông tin địa chỉ cửa hàng đã geocode */}
+          <StoreLocationInfo key={refreshKey} />
+          
+          <View style={{ height: 30 }} />
+        </ScrollView>
     );
 };
 
@@ -111,13 +123,10 @@ const styles = StyleSheet.create({
     bg: {
         flex: 1,
         backgroundColor: '#f4f8fc',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 16,
     },
     card: {
-        width: '100%',
-        maxWidth: 420,
+        marginHorizontal: 16,
+        marginTop: 16,
         backgroundColor: '#fff',
         borderRadius: 24,
         padding: 28,

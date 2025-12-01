@@ -1202,3 +1202,110 @@ export const getBestSellingProducts = async () => {
         return { success: false, error: error.message };
     }
 };
+
+// Get Product Statistics - Thống kê chi tiết từng sản phẩm
+export const getProductStatistics = async () => {
+    try {
+        // Lấy tất cả sản phẩm
+        const furnituresRef = collection(db, 'furnitures');
+        const furnituresSnapshot = await getDocs(furnituresRef);
+        
+        const furnituresMap = {};
+        furnituresSnapshot.forEach((doc) => {
+            const data = doc.data();
+            furnituresMap[doc.id] = {
+                id: doc.id,
+                name: data.furnitureName,
+                price: data.furniturePrice,
+                image: data.image || data.furnitureImage,
+                currentStock: data.quantity || 0,
+                discountPercentage: data.discountPercentage || 0,
+                totalSold: 0,
+                totalRevenue: 0,
+                monthlySales: Array(12).fill(0), // Số lượng bán theo tháng
+                averageRating: 0,
+                totalReviews: 0,
+                ratingDistribution: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 }
+            };
+        });
+
+        // Lấy tất cả đơn hàng (không bao gồm đơn hủy)
+        const ordersRef = collection(db, 'orders');
+        const ordersSnapshot = await getDocs(ordersRef);
+        
+        const today = new Date();
+        const currentYear = today.getFullYear();
+        
+        ordersSnapshot.forEach((doc) => {
+            const orderData = doc.data();
+            
+            // Bỏ qua đơn đã hủy
+            if (orderData.status === 'Đã hủy') return;
+            
+            const orderDate = orderData.createdAt?.toDate();
+            
+            if (orderData.items && Array.isArray(orderData.items)) {
+                orderData.items.forEach(item => {
+                    const furnitureId = item.furnitureItem?.furnitureId || item.furnitureItem?.id;
+                    const quantity = item.soLuong || 0;
+                    const itemPrice = item.tongGia || 0;
+                    
+                    if (furnitureId && furnituresMap[furnitureId]) {
+                        // Cộng dồn số lượng bán và doanh thu
+                        furnituresMap[furnitureId].totalSold += quantity;
+                        furnituresMap[furnitureId].totalRevenue += itemPrice;
+                        
+                        // Thống kê theo tháng (chỉ tính năm hiện tại)
+                        if (orderDate && orderDate.getFullYear() === currentYear) {
+                            const monthIndex = orderDate.getMonth();
+                            furnituresMap[furnitureId].monthlySales[monthIndex] += quantity;
+                        }
+                    }
+                });
+            }
+        });
+
+        // Lấy thống kê đánh giá cho từng sản phẩm
+        const reviewsRef = collection(db, 'reviews');
+        const reviewsSnapshot = await getDocs(reviewsRef);
+        
+        reviewsSnapshot.forEach((doc) => {
+            const reviewData = doc.data();
+            const furnitureId = reviewData.furnitureId;
+            const rating = reviewData.rating;
+            
+            if (furnitureId && furnituresMap[furnitureId] && rating >= 1 && rating <= 5) {
+                furnituresMap[furnitureId].totalReviews++;
+                furnituresMap[furnitureId].ratingDistribution[rating.toString()]++;
+            }
+        });
+
+        // Tính trung bình rating
+        Object.values(furnituresMap).forEach(product => {
+            if (product.totalReviews > 0) {
+                let totalRating = 0;
+                for (let i = 1; i <= 5; i++) {
+                    totalRating += i * product.ratingDistribution[i.toString()];
+                }
+                product.averageRating = totalRating / product.totalReviews;
+            }
+        });
+
+        // Chỉ lấy tháng hiện tại trở về trước
+        const currentMonth = today.getMonth() + 1;
+        Object.values(furnituresMap).forEach(product => {
+            product.monthlySales = product.monthlySales.slice(0, currentMonth);
+        });
+
+        // Chuyển đổi thành array và trả về
+        const productStats = Object.values(furnituresMap);
+        
+        return {
+            success: true,
+            data: productStats
+        };
+    } catch (error) {
+        console.error("Lỗi khi lấy thống kê sản phẩm:", error);
+        return { success: false, error: error.message };
+    }
+};

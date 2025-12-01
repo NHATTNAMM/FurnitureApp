@@ -10,14 +10,16 @@ import OrderScreen from './OrderScreen';
 import StatisticalScreen from './StatisticalScreen';
 import UpdateFurnitureStoreScreen from './UpdateFurnitureStoreScreen';
 import UserScreen from './UserScreen';
+import ProductStatisticsScreen from './ProductStatisticsScreen';
 import { LogOut } from '../Firebase/FirebaseAPI';
 import { UserContext } from '../Firebase/UserContext';
 
 const menuItem=[
     {
         key:'1',
-        label :'Thống kê' 
+        label :'Thống kê tổng quan' 
     },
+    { key: '8', label: 'Thống kê sản phẩm' },
     { key:'2' ,label:'Khách hàng'},
     { key: '3', label: 'Sản phẩm' },
     { key: '4', label: 'Đơn hàng' },
@@ -104,6 +106,8 @@ const AdminScreen = () => {
                     setShouldNavigateToChat(true);
                 }
                 return null;
+            case '8':
+                return <ProductStatisticsScreen/>
             default:
                 return null;
         }
@@ -111,12 +115,13 @@ const AdminScreen = () => {
 
     const getTitle = () => {
         switch (selectedMenu) {
-            case '1': return 'Thống kê';
+            case '1': return 'Thống kê tổng quan';
             case '2': return 'Danh sách khách hàng';
             case '3': return 'Danh sách sản phẩm';
             case '4': return 'Danh sách đơn hàng';
             case '5': return 'Cập nhật thông tin cửa hàng';
             case '7': return 'Quản lý Chat';
+            case '8': return 'Thống kê sản phẩm';
             default: return '';
         }
     };
@@ -231,6 +236,7 @@ const getIconName = (key) => {
         case '4': return 'receipt';
         case '5': return 'business';
         case '7': return 'chatbubbles';
+        case '8': return 'analytics';
         case '6': return 'log-out';
         default: return 'square';
     }

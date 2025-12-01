@@ -12,6 +12,7 @@ import {
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { UserContext } from '../Firebase/UserContext';
 import { checkoutOrders } from '../Firebase/FirebaseAPI';
+import { calculateDeliveryDistance } from '../services/LocationService';
 
 const PaymentScreen = ({ navigation, route }) => {
   const { user } = useContext(UserContext);
@@ -20,6 +21,8 @@ const PaymentScreen = ({ navigation, route }) => {
   const [showQRModal, setShowQRModal] = useState(false);
   const [showEWalletModal, setShowEWalletModal] = useState(false);
   const [selectedWallet, setSelectedWallet] = useState('momo'); // 'momo', 'zalopay', 'vnpay'
+  const [deliveryDistance, setDeliveryDistance] = useState(null); // Khoảng cách giao hàng (km)
+  const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
 
   useEffect(() => {
     // Nhận dữ liệu từ Cart screen
@@ -28,22 +31,71 @@ const PaymentScreen = ({ navigation, route }) => {
     }
   }, [route.params]);
 
+  // Tính khoảng cách giao hàng khi có địa chỉ
+  useEffect(() => {
+    const calculateDistance = async () => {
+      if (user?.address && user.address.trim() !== '') {
+        setIsCalculatingDistance(true);
+        try {
+          const distance = await calculateDeliveryDistance(user.address);
+          setDeliveryDistance(distance);
+        } catch (error) {
+          console.error('Error calculating distance:', error);
+          setDeliveryDistance(10); // Mặc định 10km nếu lỗi
+        } finally {
+          setIsCalculatingDistance(false);
+        }
+      } else {
+        setDeliveryDistance(10); // Mặc định 10km nếu chưa có địa chỉ
+      }
+    };
+
+    calculateDistance();
+  }, [user?.address]);
+
   const getSubTotal = () => {
     return cartItems.reduce((sum, item) => sum + (item.tongGia || 0), 0);
   };
 
+  // Lấy khoảng cách giao hàng thực tế
+  const getDeliveryDistance = () => {
+    return deliveryDistance || 10; // Mặc định 10km nếu chưa tính được
+  };
+
   const getBaseShippingFee = () => {
-    // Phí vận chuyển mặc định 35,000đ
-    return 35000;
+    const subTotal = getSubTotal();
+    const FREE_SHIPPING_THRESHOLD = 500000; // 500K
+    const MAX_SHIPPING_FEE = 80000; // Giới hạn tối đa 80K
+    
+    // Miễn phí vận chuyển nếu đơn hàng >= 500K
+    if (subTotal >= FREE_SHIPPING_THRESHOLD) {
+      return 0;
+    }
+    
+    // Tính phí theo khoảng cách khi đơn < 500K
+    // Công thức: 3.000đ/5km
+    const distance = getDeliveryDistance();
+    const ratePerKm = 3000; // 3K/km
+    
+    let shippingFee = distance * ratePerKm;
+    
+    // Đảm bảo không vượt quá 80K
+    return Math.min(shippingFee, MAX_SHIPPING_FEE);
   };
 
   const getShippingDiscount = () => {
-    // Voucher giảm phí vận chuyển mặc định từ cửa hàng: 35,000đ
-    return 35000;
+    const subTotal = getSubTotal();
+    const FREE_SHIPPING_THRESHOLD = 500000; // 500K
+    
+    // Hiển thị voucher miễn phí khi đơn >= 500K
+    if (subTotal >= FREE_SHIPPING_THRESHOLD) {
+      return getBaseShippingFee(); // Giảm toàn bộ phí vận chuyển
+    }
+    
+    return 0; // Không có voucher khi đơn < 500K
   };
 
   const getShippingFee = () => {
-    // Phí cuối cùng = phí gốc - giảm giá = 35,000 - 35,000 = 0
     return Math.max(0, getBaseShippingFee() - getShippingDiscount());
   };
 
@@ -359,6 +411,20 @@ const PaymentScreen = ({ navigation, route }) => {
               {user?.address || 'Chưa cập nhật địa chỉ giao hàng'}
             </Text>
             
+            {/* Hiển thị khoảng cách giao hàng */}
+            {user?.address && (
+              <View style={styles.distanceContainer}>
+                <MaterialIcons name="local-shipping" size={16} color="#000D66" />
+                <Text style={styles.distanceText}>
+                  {isCalculatingDistance ? (
+                    'Đang tính khoảng cách...'
+                  ) : (
+                    `Khoảng cách giao hàng: ~${deliveryDistance || 10} km`
+                  )}
+                </Text>
+              </View>
+            )}
+            
             {/* Cảnh báo nếu thiếu thông tin */}
             {(!user?.fullName || !user?.phone || !user?.address) && (
               <View style={styles.warningContainer}>
@@ -461,19 +527,36 @@ const PaymentScreen = ({ navigation, route }) => {
             </TouchableOpacity>
           </View>
           
-          <View style={styles.voucherApplied}>
-            <View style={styles.voucherIcon}>
-              <MaterialIcons name="local-offer" size={24} color="#4CAF50" />
+          {getSubTotal() >= 500000 ? (
+            <View style={styles.voucherApplied}>
+              <View style={styles.voucherIcon}>
+                <MaterialIcons name="local-offer" size={24} color="#4CAF50" />
+              </View>
+              <View style={styles.voucherInfo}>
+                <Text style={styles.voucherTitle}>Miễn phí vận chuyển</Text>
+                <Text style={styles.voucherDescription}>Đơn hàng từ 500K được miễn phí ship</Text>
+                <Text style={styles.voucherValue}>Giảm: {formatPrice(getShippingDiscount())}đ</Text>
+              </View>
+              <View style={styles.voucherBadge}>
+                <Text style={styles.voucherBadgeText}>Đã áp dụng</Text>
+              </View>
             </View>
-            <View style={styles.voucherInfo}>
-              <Text style={styles.voucherTitle}>Miễn phí vận chuyển</Text>
-              <Text style={styles.voucherDescription}>Voucher giảm phí vận chuyển từ cửa hàng</Text>
-              <Text style={styles.voucherValue}>Giảm: 35.000đ</Text>
+          ) : (
+            <View style={styles.voucherUnavailable}>
+              <View style={styles.voucherIconGray}>
+                <MaterialIcons name="local-offer" size={24} color="#9CA3AF" />
+              </View>
+              <View style={styles.voucherInfo}>
+                <Text style={styles.voucherTitleGray}>Miễn phí vận chuyển</Text>
+                <Text style={styles.voucherDescriptionGray}>
+                  Mua thêm {formatPrice(500000 - getSubTotal())}đ để được miễn phí ship
+                </Text>
+              </View>
+              <View style={styles.voucherBadgeGray}>
+                <Text style={styles.voucherBadgeTextGray}>Chưa đủ điều kiện</Text>
+              </View>
             </View>
-            <View style={styles.voucherBadge}>
-              <Text style={styles.voucherBadgeText}>Đã áp dụng</Text>
-            </View>
-          </View>
+          )}
         </View>
 
         {/* Chi tiết thanh toán */}
@@ -490,16 +573,25 @@ const PaymentScreen = ({ navigation, route }) => {
             </View>
             
             <View style={styles.paymentRow}>
-              <Text style={styles.paymentLabel}>Tổng tiền phí vận chuyển</Text>
-              <Text style={styles.paymentValue}>{formatPrice(getBaseShippingFee())}đ</Text>
-            </View>
-            
-            <View style={styles.paymentRow}>
-              <Text style={styles.paymentLabel}>Giảm giá phí vận chuyển</Text>
-              <Text style={[styles.paymentValue, styles.discountValue]}>
-                -{formatPrice(getShippingDiscount())}đ
+              <Text style={styles.paymentLabel}>
+                Phí vận chuyển {getSubTotal() < 500000 ? `(~${getDeliveryDistance()}km)` : ''}
+              </Text>
+              <Text style={styles.paymentValue}>
+                {getSubTotal() >= 500000 
+                  ? 'Miễn phí' 
+                  : formatPrice(getBaseShippingFee()) + 'đ'
+                }
               </Text>
             </View>
+            
+            {getShippingDiscount() > 0 && (
+              <View style={styles.paymentRow}>
+                <Text style={styles.paymentLabel}>Giảm giá phí vận chuyển</Text>
+                <Text style={[styles.paymentValue, styles.discountValue]}>
+                  -{formatPrice(getShippingDiscount())}đ
+                </Text>
+              </View>
+            )}
             
             <View style={styles.divider} />
             
@@ -518,7 +610,9 @@ const PaymentScreen = ({ navigation, route }) => {
         <View style={styles.totalContainer}>
           <Text style={styles.footerTotalLabel}>Tổng cộng</Text>
           <Text style={styles.footerTotalValue}>{formatPrice(getTotal())}đ</Text>
-          <Text style={styles.footerSaving}>Tiết kiệm {formatPrice(getShippingDiscount())}đ</Text>
+          {getShippingDiscount() > 0 && (
+            <Text style={styles.footerSaving}>Tiết kiệm {formatPrice(getShippingDiscount())}đ phí ship</Text>
+          )}
         </View>
         <TouchableOpacity style={styles.orderButton} onPress={handlePlaceOrder}>
           <Text style={styles.orderButtonText}>Đặt hàng</Text>
@@ -622,7 +716,11 @@ const PaymentScreen = ({ navigation, route }) => {
               >
                 <View style={styles.walletLeft}>
                   <View style={[styles.walletIconContainer, { backgroundColor: '#FFF0F5' }]}>
-                    <MaterialIcons name="wallet" size={28} color="#D82D8B" />
+                    <Image 
+                      source={require('../../assets/images/logomomo.png')}
+                      style={styles.walletLogo}
+                      resizeMode="contain"
+                    />
                   </View>
                   <View style={styles.walletInfo}>
                     <Text style={styles.walletName}>MoMo</Text>
@@ -641,7 +739,11 @@ const PaymentScreen = ({ navigation, route }) => {
               >
                 <View style={styles.walletLeft}>
                   <View style={[styles.walletIconContainer, { backgroundColor: '#E6F0FF' }]}>
-                    <MaterialIcons name="account-balance-wallet" size={28} color="#0068FF" />
+                    <Image 
+                      source={require('../../assets/images/logozalopay.png')}
+                      style={styles.walletLogo}
+                      resizeMode="contain"
+                    />
                   </View>
                   <View style={styles.walletInfo}>
                     <Text style={styles.walletName}>ZaloPay</Text>
@@ -660,7 +762,11 @@ const PaymentScreen = ({ navigation, route }) => {
               >
                 <View style={styles.walletLeft}>
                   <View style={[styles.walletIconContainer, { backgroundColor: '#E6F3FF' }]}>
-                    <MaterialIcons name="payment" size={28} color="#005BAA" />
+                    <Image 
+                      source={require('../../assets/images/logovnpay.png')}
+                      style={styles.walletLogo}
+                      resizeMode="contain"
+                    />
                   </View>
                   <View style={styles.walletInfo}>
                     <Text style={styles.walletName}>VNPay</Text>
@@ -702,7 +808,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 40,
+    paddingTop: 20,
     paddingBottom: 15,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
@@ -776,6 +882,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     lineHeight: 20,
+  },
+  distanceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: '#F0F4FF',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#000D66',
+    alignSelf: 'flex-start',
+  },
+  distanceText: {
+    fontSize: 13,
+    color: '#000D66',
+    fontWeight: '600',
+    marginLeft: 6,
   },
   warningContainer: {
     flexDirection: 'row',
@@ -977,6 +1101,42 @@ const styles = StyleSheet.create({
   },
   voucherBadgeText: {
     color: '#fff',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  // Voucher không khả dụng
+  voucherUnavailable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginLeft: 28,
+  },
+  voucherIconGray: {
+    marginRight: 12,
+  },
+  voucherTitleGray: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginBottom: 2,
+  },
+  voucherDescriptionGray: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginBottom: 4,
+  },
+  voucherBadgeGray: {
+    backgroundColor: '#E5E7EB',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  voucherBadgeTextGray: {
+    color: '#6B7280',
     fontSize: 10,
     fontWeight: '600',
   },
@@ -1246,6 +1406,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
+    overflow: 'hidden',
+  },
+  walletLogo: {
+    width: 40,
+    height: 40,
   },
   walletInfo: {
     flex: 1,

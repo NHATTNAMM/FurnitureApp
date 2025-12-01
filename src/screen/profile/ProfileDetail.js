@@ -1,5 +1,5 @@
 import React, { useContext, useState } from 'react';
-import { StyleSheet, Text, View, Image, ScrollView, TouchableOpacity, Alert, TextInput, KeyboardAvoidingView, Platform, Linking, Modal } from 'react-native';
+import { StyleSheet, Text, View, Image, ScrollView, TouchableOpacity, Alert, TextInput, KeyboardAvoidingView, Platform, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { UserContext } from '../../Firebase/UserContext';
@@ -10,7 +10,6 @@ import ImageModal from '../../Modal/ImageModal';
 import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
 import * as Location from 'expo-location';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 
 const PRIMARY = '#000D66';
 const SECONDARY = '#F3F4F6';
@@ -26,9 +25,6 @@ const ProfileDetail = () => {
     const [ward, setWard] = useState('');
     const [modalVisible, setModalVisible] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [mapVisible, setMapVisible] = useState(false);
-    const [selectedLocation, setSelectedLocation] = useState(null);
-    const [currentLocation, setCurrentLocation] = useState(null);
 
     const CLOUD_NAME = 'dleidkd6p';
     const UPLOAD_PRESET = 'interiorapp';
@@ -93,84 +89,6 @@ const ProfileDetail = () => {
         }
     };
 
-    const getCurrentLocation = async () => {
-        try {
-            setLoading(true);
-            const { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== 'granted') {
-                Alert.alert('Cần quyền truy cập vị trí', 'Vui lòng cấp quyền truy cập vị trí trong cài đặt của thiết bị.');
-                return;
-            }
-
-            const location = await Location.getCurrentPositionAsync({
-                accuracy: Location.Accuracy.High,
-                timeout: 15000
-            });
-
-            setCurrentLocation(location.coords);
-            setSelectedLocation(location.coords);
-            setMapVisible(true);
-        } catch (error) {
-            console.error('Lỗi:', error.message);
-            Alert.alert('Lỗi', 'Không thể lấy vị trí hiện tại. Vui lòng thử lại sau.');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleMapPress = (event) => {
-        setSelectedLocation(event.nativeEvent.coordinate);
-    };
-
-    const handleSaveLocation = async () => {
-        if (!selectedLocation) {
-            Alert.alert('Lỗi', 'Vui lòng chọn một vị trí trên bản đồ');
-            return;
-        }
-
-        try {
-            setLoading(true);
-            const response = await axios.get(
-                `https://nominatim.openstreetmap.org/reverse`,
-                {
-                    params: {
-                        lat: selectedLocation.latitude,
-                        lon: selectedLocation.longitude,
-                        format: 'json',
-                        'accept-language': 'vi'
-                    },
-                    headers: {
-                        'User-Agent': 'FurnitureApp/1.0'
-                    }
-                }
-            );
-
-            if (response.data && response.data.address) {
-                const address = response.data.address;
-                const houseNumber = address.house_number || '';
-                const road = address.road || address.street || '';
-                const formattedAddress = `${houseNumber} ${road}, ${response.data.display_name}`;
-
-                const city = address.city || address.state || '';
-                const district = address.district || address.county || address.suburb || '';
-                const ward = address.neighbourhood || address.suburb || '';
-
-                setAddress(formattedAddress);
-                setCity(city);
-                setDistrict(district);
-                setWard(ward);
-                setMapVisible(false);
-            } else {
-                Alert.alert('Lỗi', 'Không thể lấy thông tin địa chỉ. Vui lòng thử lại sau.');
-            }
-        } catch (error) {
-            console.error('Lỗi:', error.message);
-            Alert.alert('Lỗi', 'Không thể lấy thông tin địa chỉ. Vui lòng thử lại sau.');
-        } finally {
-            setLoading(false);
-        }
-    };
-
     if (!user) {
         return (
             <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: SECONDARY }}>
@@ -216,27 +134,10 @@ const ProfileDetail = () => {
                                     <View style={styles.editDetail}>
                                         <ProfileInput label="Họ và tên" value={fullName} onChangeText={setFullName} />
                                         <ProfileInput label="Số điện thoại" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-                                        <View style={styles.itemUser}>
-                                            <Text style={styles.textOnInput}>Địa chỉ</Text>
-                                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                                <TextInput
-                                                    style={[styles.textInput, { flex: 1 }]}
-                                                    value={address}
-                                                    onChangeText={setAddress}
-                                                    placeholder="Nhập địa chỉ"
-                                                    placeholderTextColor="#9CA3AF"
-                                                />
-                                                <TouchableOpacity
-                                                    onPress={getCurrentLocation}
-                                                    style={styles.locationButton}
-                                                >
-                                                    <Ionicons name="location" size={24} color={PRIMARY} />
-                                                </TouchableOpacity>
-                                            </View>
-                                        </View>
-                                        <ProfileInput label="Thành phố" value={city} editable={false} />
-                                        <ProfileInput label="Quận/Huyện" value={district} editable={false} />
-                                        <ProfileInput label="Phường/Xã" value={ward} editable={false} />
+                                        <ProfileInput label="Địa chỉ" value={address} onChangeText={setAddress} />
+                                        <ProfileInput label="Thành phố" value={city} onChangeText={setCity} />
+                                        <ProfileInput label="Quận/Huyện" value={district} onChangeText={setDistrict} />
+                                        <ProfileInput label="Phường/Xã" value={ward} onChangeText={setWard} />
                                     </View>
                                 </View>
                             </View>
@@ -266,54 +167,6 @@ const ProfileDetail = () => {
                     onCamera={onPickCamera}
                     onLibrary={onPickLibrary}
                 />
-                <Modal
-                    visible={mapVisible}
-                    animationType="slide"
-                    onRequestClose={() => setMapVisible(false)}
-                >
-                    <SafeAreaView style={{ flex: 1 }}>
-                        <View style={styles.mapHeader}>
-                            <TouchableOpacity onPress={() => setMapVisible(false)}>
-                                <Ionicons name="arrow-back" size={24} color={PRIMARY} />
-                            </TouchableOpacity>
-                            <Text style={styles.mapTitle}>Chọn vị trí</Text>
-                            <TouchableOpacity onPress={handleSaveLocation}>
-                                <Text style={styles.saveButton}>Lưu</Text>
-                            </TouchableOpacity>
-                        </View>
-                        <View style={styles.mapContainer}>
-                            <MapView
-                                provider={PROVIDER_GOOGLE}
-                                style={styles.map}
-                                initialRegion={selectedLocation ? {
-                                    latitude: selectedLocation.latitude,
-                                    longitude: selectedLocation.longitude,
-                                    latitudeDelta: 0.005,
-                                    longitudeDelta: 0.005,
-                                } : {
-                                    latitude: 10.762622,
-                                    longitude: 106.660172,
-                                    latitudeDelta: 0.0922,
-                                    longitudeDelta: 0.0421,
-                                }}
-                                onPress={handleMapPress}
-                            >
-                                {selectedLocation && (
-                                    <Marker
-                                        coordinate={selectedLocation}
-                                        title="Vị trí đã chọn"
-                                    />
-                                )}
-                            </MapView>
-                            <TouchableOpacity
-                                style={styles.currentLocationButton}
-                                onPress={getCurrentLocation}
-                            >
-                                <MaterialIcons name="my-location" size={24} color={PRIMARY} />
-                            </TouchableOpacity>
-                        </View>
-                    </SafeAreaView>
-                </Modal>
             </SafeAreaView>
         </View>
     );
@@ -458,52 +311,5 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontWeight: 'bold',
         fontSize: 16,
-    },
-    locationButton: {
-        padding: 10,
-        marginLeft: 5,
-        backgroundColor: '#F3F4F6',
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
-    },
-    mapHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: 16,
-        backgroundColor: 'white',
-        borderBottomWidth: 1,
-        borderBottomColor: '#E5E7EB',
-    },
-    mapTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: PRIMARY,
-    },
-    saveButton: {
-        color: PRIMARY,
-        fontSize: 16,
-        fontWeight: 'bold',
-    },
-    mapContainer: {
-        flex: 1,
-        position: 'relative',
-    },
-    map: {
-        flex: 1,
-    },
-    currentLocationButton: {
-        position: 'absolute',
-        bottom: 20,
-        right: 20,
-        backgroundColor: '#fff',
-        padding: 12,
-        borderRadius: 30,
-        elevation: 5,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
     },
 });
