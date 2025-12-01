@@ -123,7 +123,25 @@ const Order = ({ navigation }) => {
   };
 
   const renderOrderItem = ({ item }) => (
-    <View style={styles.orderItem}>
+    <TouchableOpacity 
+      style={styles.orderItem}
+      onPress={() => {
+        console.log('Order - Navigating to OrderDetail with:', item);
+        // Chuyển đổi format dữ liệu để phù hợp với OrderDetailScreen
+        const orderDetail = {
+          ...item,
+          // Nếu có nhiều items, lấy item đầu tiên để hiển thị
+          furnitureItem: item.items?.[0]?.furnitureItem,
+          soLuong: item.items?.reduce((sum, i) => sum + (i.soLuong || 0), 0),
+          tongGia: item.totalAmount,
+          fullName: item.deliveryName || item.fullName,
+          phone: item.deliveryPhone || item.phone,
+          address: item.deliveryAddress || item.address,
+        };
+        navigation.navigate('OrderDetail', { order: orderDetail });
+      }}
+      activeOpacity={0.8}
+    >
       <View style={styles.orderHeader}>
         <Text style={styles.orderDate}>
           {new Date(item.createdAt?.toDate()).toLocaleDateString('vi-VN')}
@@ -177,7 +195,8 @@ const Order = ({ navigation }) => {
           </TouchableOpacity>
         )}
       </View>
-    </View>
+      <Text style={styles.viewDetailHint}>Nhấn để xem chi tiết đơn hàng</Text>
+    </TouchableOpacity>
   );
 
   return (
@@ -466,6 +485,13 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontWeight: '600',
     fontSize: 14,
+  },
+  viewDetailHint: {
+    textAlign: 'center',
+    color: '#2196F3',
+    fontSize: 13,
+    marginTop: 10,
+    fontWeight: '500',
   },
 });
 

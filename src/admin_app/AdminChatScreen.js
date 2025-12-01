@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import {
   View,
   Text,
@@ -39,7 +39,8 @@ const AdminChatScreen = ({ navigation }) => {
 
   // Menu items tương tự như AdminScreen
   const menuItem = [
-    { key: '1', label: 'Thống kê' },
+    { key: '1', label: 'Thống kê tổng quan' },
+    { key: '8', label: 'Thống kê sản phẩm' },
     { key: '2', label: 'Khách hàng' },
     { key: '3', label: 'Sản phẩm' },
     { key: '4', label: 'Đơn hàng' },
@@ -50,7 +51,11 @@ const AdminChatScreen = ({ navigation }) => {
 
   useEffect(() => {
     // Kiểm tra quyền admin
-    if (!user || user.role !== 'admin') {
+    if (!user) {
+      return;
+    }
+    
+    if (user.role !== 'admin') {
       Alert.alert(
         "Không có quyền truy cập",
         "Bạn không có quyền truy cập trang này",
@@ -72,7 +77,7 @@ const AdminChatScreen = ({ navigation }) => {
     // Reload chats every 30 seconds
     const interval = setInterval(loadChats, 30000);
     return () => clearInterval(interval);
-  }, [user, navigation]);
+  }, [user?.id, user?.role]); // Bỏ loadChats ra khỏi dependencies vì nó đã stable với useCallback
 
   const handleLogOut = () => {
     Alert.alert("Xác nhận", "Bạn có chắc muốn đăng xuất?", [
@@ -106,7 +111,8 @@ const AdminChatScreen = ({ navigation }) => {
       case '3':
       case '4':
       case '5':
-        navigation.navigate('AdminHome');
+      case '8':
+        navigation.navigate('AdminHome', { selectedMenu: key });
         break;
       case '6':
         handleLogOut();
@@ -127,34 +133,49 @@ const AdminChatScreen = ({ navigation }) => {
       case '4': return 'receipt';
       case '5': return 'business';
       case '7': return 'chatbubbles';
+      case '8': return 'analytics';
       case '6': return 'log-out';
       default: return 'square';
     }
   };
 
-  const loadChats = async () => {
+  const loadChats = useCallback(async () => {
     setIsLoading(true);
     const result = await getAllUserChats();
     if (result.success) {
       setChats(result.data);
     }
     setIsLoading(false);
-  };
+  }, []); // Empty dependency - function không thay đổi
 
   const handleChatPress = (chat) => {
     setSelectedChat(chat);
     setModalVisible(true);
-    
-    // Load messages - Reverse để tin mới nhất ở trên cùng
-    const unsubscribe = loadChatMessages(chat.userId, (loadedMessages) => {
-      setMessages([...loadedMessages].reverse());
-    });
-    
-    // Cleanup
-    return () => {
-      if (unsubscribe) unsubscribe();
-    };
   };
+
+  // useEffect để load messages khi modal được mở
+  useEffect(() => {
+    if (!selectedChat || !modalVisible) {
+      return;
+    }
+
+    let isMounted = true; // Flag để tránh update khi component unmount
+
+    // Load messages - Reverse để tin mới nhất ở trên cùng
+    const unsubscribe = loadChatMessages(selectedChat.userId, (loadedMessages) => {
+      if (isMounted) {
+        setMessages([...loadedMessages].reverse());
+      }
+    });
+
+    // Cleanup khi đóng modal hoặc chọn chat khác
+    return () => {
+      isMounted = false;
+      if (unsubscribe && typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
+  }, [selectedChat?.userId, modalVisible]);
 
   const scrollToBottom = () => {
     flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
@@ -409,7 +430,11 @@ const AdminChatScreen = ({ navigation }) => {
       <Modal
         visible={modalVisible}
         animationType="none"
-        onRequestClose={() => setModalVisible(false)}
+        onRequestClose={() => {
+          setModalVisible(false);
+          setSelectedChat(null);
+          setMessages([]);
+        }}
       >
         <KeyboardAvoidingView
           style={styles.modalContainer}
@@ -417,7 +442,11 @@ const AdminChatScreen = ({ navigation }) => {
         >
           {/* Modal Header */}
           <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setModalVisible(false)}>
+            <TouchableOpacity onPress={() => {
+              setModalVisible(false);
+              setSelectedChat(null);
+              setMessages([]);
+            }}>
               <Ionicons name="arrow-back" size={24} color="#fff" />
             </TouchableOpacity>
             <View style={styles.modalHeaderInfo}>

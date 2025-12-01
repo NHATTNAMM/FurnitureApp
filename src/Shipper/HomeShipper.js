@@ -197,11 +197,19 @@ const HomeShipper = ({ navigation }) => {
       />
       
       <View style={styles.header}>
-        <Image 
-          source={require('../../assets/images/furniturelogo.png')} 
-          style={styles.headerLogo}
-        />
-        <Text style={styles.headerTitle}>Quản lý đơn hàng</Text>
+        <TouchableOpacity 
+          style={styles.profileButton} 
+          onPress={() => navigation.navigate('ShipperProfile')}
+        >
+          <MaterialIcons name="person" size={24} color="#FFF" />
+        </TouchableOpacity>
+        <View style={styles.headerCenter}>
+          <Image 
+            source={require('../../assets/images/furniturelogo.png')} 
+            style={styles.headerLogo}
+          />
+          <Text style={styles.headerTitle}>Quản lý đơn hàng</Text>
+        </View>
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <MaterialIcons name="logout" size={24} color="#FFF" />
         </TouchableOpacity>
@@ -435,13 +443,30 @@ const styles = StyleSheet.create({
     backgroundColor: '#000D66',
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
+    justifyContent: 'space-between',
+    paddingHorizontal: 15,
     elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
+  },
+  profileButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerCenter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    justifyContent: 'center',
+    pointerEvents: 'none',
   },
   headerLogo: {
     width: 35,
@@ -455,11 +480,12 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   logoutButton: {
-    position: 'absolute',
-    right: 15,
-    padding: 8,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 40,
+    height: 40,
     borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   tabContainer: {
     flexDirection: 'row',

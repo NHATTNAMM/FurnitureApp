@@ -166,6 +166,8 @@ const PaymentScreen = ({ navigation, route }) => {
           tongGia: item.tongGia || 0
         })),
         totalAmount: getTotal(),
+        shippingFee: getBaseShippingFee(),
+        shippingDiscount: getShippingDiscount(),
         paymentMethod: paymentType,
         paymentStatus: paymentType === 'cod' ? 'pending' : 'completed',
         walletProvider: paymentType === 'ewallet' ? selectedWallet : null,

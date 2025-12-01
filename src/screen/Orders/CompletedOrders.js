@@ -1,10 +1,12 @@
 import React, { useEffect, useState, useContext } from 'react';
-import { Text, View, FlatList, StyleSheet } from 'react-native';
+import { Text, View, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
 import { UserContext } from '../../Firebase/UserContext';
 import { loadCartRealTime } from '../../Firebase/FirebaseAPI';
+import { useNavigation } from '@react-navigation/native';
 
 const CompletedOrders = () => {
   const { user } = useContext(UserContext);
+  const navigation = useNavigation();
   const [orders, setOrders] = useState([]);
 
   useEffect(() => {
@@ -25,13 +27,24 @@ const CompletedOrders = () => {
     }
   }, [user]);
 
-  const renderItem = ({ item }) => (
-    <View style={styles.orderItem}>
-      <Text style={styles.furniName}>{item.furnitureItem?.furnitureName || 'Tên sản phẩm'}</Text>
-      <Text>Số lượng: {item.soLuong}</Text>
-      <Text>Tổng: {item.tongGia.toLocaleString('vi-VN')} đ</Text>
-    </View>
-  );
+  const renderItem = ({ item }) => {
+    console.log('Order item:', item);
+    return (
+      <TouchableOpacity 
+        style={styles.orderItem}
+        onPress={() => {
+          console.log('Navigating to OrderDetail with:', item);
+          navigation.navigate('OrderDetail', { order: item });
+        }}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.furniName}>{item.furnitureItem?.furnitureName || 'Tên sản phẩm'}</Text>
+        <Text>Số lượng: {item.soLuong}</Text>
+        <Text>Tổng: {item.tongGia.toLocaleString('vi-VN')} đ</Text>
+        <Text style={styles.viewDetailText}>Xem chi tiết →</Text>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -72,6 +85,12 @@ const styles = StyleSheet.create({
     marginTop: 20,
     fontSize: 16,
     color: '#888',
+  },
+  viewDetailText: {
+    color: '#2196F3',
+    fontSize: 14,
+    marginTop: 8,
+    fontWeight: '600',
   },
 });
 

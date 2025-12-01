@@ -1,18 +1,20 @@
-import {StyleSheet, Text, TouchableOpacity, View, TouchableWithoutFeedback, Alert, StatusBar} from 'react-native'
+import {StyleSheet, Text, TouchableOpacity, View, TouchableWithoutFeedback, Alert, StatusBar, ActivityIndicator} from 'react-native'
 import React, { useState, useContext, useEffect } from 'react'
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import GlobalStyles from '../globals/globalStyles';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import FurnitureScreen from './FurnitureScreen';
-import OrderScreen from './OrderScreen';
-import StatisticalScreen from './StatisticalScreen';
-import UpdateFurnitureStoreScreen from './UpdateFurnitureStoreScreen';
-import UserScreen from './UserScreen';
-import ProductStatisticsScreen from './ProductStatisticsScreen';
 import { LogOut } from '../Firebase/FirebaseAPI';
 import { UserContext } from '../Firebase/UserContext';
+
+// Lazy load components để tăng tốc độ load ban đầu
+const FurnitureScreen = React.lazy(() => import('./FurnitureScreen'));
+const OrderScreen = React.lazy(() => import('./OrderScreen'));
+const StatisticalScreen = React.lazy(() => import('./StatisticalScreen'));
+const UpdateFurnitureStoreScreen = React.lazy(() => import('./UpdateFurnitureStoreScreen'));
+const UserScreen = React.lazy(() => import('./UserScreen'));
+const ProductStatisticsScreen = React.lazy(() => import('./ProductStatisticsScreen'));
 
 const menuItem=[
     {
@@ -28,19 +30,51 @@ const menuItem=[
     { key: '6', label: 'Đăng xuất' },
 ]
 
-const AdminScreen = () => {
+const AdminScreen = ({ route }) => {
     const {user} = useContext(UserContext);
     const navigation = useNavigation();
     const [selectedMenu, setSelectedMenu] = useState('1')
     const [sidebar, setSidebar] = useState(true);
-    const [shouldNavigateToChat, setShouldNavigateToChat] = useState(false);
+    const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
+
+    // useEffect để nhận menu từ navigation params
+    useEffect(() => {
+        if (route?.params?.selectedMenu) {
+            setSelectedMenu(route.params.selectedMenu);
+            // Clear params sau khi đã set
+            navigation.setParams({ selectedMenu: undefined });
+        }
+    }, [route?.params?.selectedMenu]);
+
+    // useEffect để handle navigation cho Quản lý Chat
+    useEffect(() => {
+        if (selectedMenu === '7') {
+            navigation.navigate('AdminChat');
+            // Reset về menu mặc định để tránh navigate lại khi quay lại
+            setSelectedMenu('1');
+        }
+    }, [selectedMenu, navigation]);
 
     useEffect(() => {
-        // Kiểm tra nếu không phải admin thì chuyển về trang đăng nhập
-        if (!user || user.role !== 'admin') {
+        // Chỉ kiểm tra khi user đã được load
+        if (!user) {
+            return;
+        }
+        
+        // Nếu đã check rồi thì không check nữa
+        if (hasCheckedAuth) {
+            return;
+        }
+        
+        // Đánh dấu đã check
+        setHasCheckedAuth(true);
+        
+        // Nếu user không phải admin thì chuyển về màn hình login
+        const userRole = user.role ? user.role.toLowerCase() : '';
+        if (userRole !== 'admin') {
             Alert.alert(
                 "Không có quyền truy cập",
-                "Bạn không có quyền truy cập trang này",
+                `Bạn không có quyền truy cập trang này\n\nThông tin:\nTên: ${user.fullName}\nEmail: ${user.email}\nRole: ${user.role}`,
                 [
                     {
                         text: "OK",
@@ -52,17 +86,7 @@ const AdminScreen = () => {
                 ]
             );
         }
-    }, [user, navigation]); // ✅ Thêm navigation vào dependencies
-
-    // ✅ Handle navigation to Chat screen
-    useEffect(() => {
-        if (shouldNavigateToChat) {
-            navigation.navigate('AdminChat');
-            setShouldNavigateToChat(false);
-            // Reset menu về 1 sau khi navigate
-            setSelectedMenu('1');
-        }
-    }, [shouldNavigateToChat, navigation]);
+    }, [user, navigation, hasCheckedAuth]);
 
     const handleLogOut = () =>{
         Alert.alert("Xác nhận", "Bạn có chắc muốn đăng xuất?",[
@@ -89,28 +113,37 @@ const AdminScreen = () => {
     }
 
     const renderItem = () =>{
-        switch(selectedMenu){
-            case '1':
-                return <StatisticalScreen onNavigateToMenu={setSelectedMenu} />
-            case '2':
-                return <UserScreen/>
-            case '3':
-                return <FurnitureScreen/>
-            case '4':
-                return <OrderScreen/>
-            case '5':
-                return <UpdateFurnitureStoreScreen />;
-            case '7':
-                // ✅ Set flag to navigate in useEffect
-                if (!shouldNavigateToChat) {
-                    setShouldNavigateToChat(true);
-                }
-                return null;
-            case '8':
-                return <ProductStatisticsScreen/>
-            default:
-                return null;
-        }
+        const LoadingFallback = () => (
+            <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#000d66" />
+                <Text style={{ marginTop: 10, color: '#000d66' }}>Đang tải...</Text>
+            </View>
+        );
+
+        return (
+            <React.Suspense fallback={<LoadingFallback />}>
+                {(() => {
+                    switch(selectedMenu){
+                        case '1':
+                            return <StatisticalScreen onNavigateToMenu={setSelectedMenu} />
+                        case '2':
+                            return <UserScreen/>
+                        case '3':
+                            return <FurnitureScreen/>
+                        case '4':
+                            return <OrderScreen/>
+                        case '5':
+                            return <UpdateFurnitureStoreScreen />;
+                        case '7':
+                            return null;
+                        case '8':
+                            return <ProductStatisticsScreen/>
+                        default:
+                            return null;
+                    }
+                })()}
+            </React.Suspense>
+        );
     }
 
     const getTitle = () => {
@@ -126,104 +159,106 @@ const AdminScreen = () => {
         }
     };
 
-    // Nếu không phải admin thì không render gì cả
-    if (!user || user.role !== 'admin') {
-        return null;
-    }
-
     return (
         <View style={styles.mainContainer}>
             <StatusBar backgroundColor="#000d66" barStyle="light-content" />
-            <SafeAreaView style={styles.safeArea}>
-                <View style={styles.header}>
-                    {!sidebar && (
-                        <TouchableOpacity 
-                            style={styles.openBtn} 
-                            onPress={() => setSidebar(true)}
-                        >
-                            <Ionicons name="menu" size={28} color="white" />
-                        </TouchableOpacity>
-                    )}
-                    <View style={styles.headerContent}>
-                        <Text style={styles.headerTitle}>
-                            {getTitle()}
-                        </Text>
-                        <Text style={styles.headerSubtitle}>
-                            Quản lý hệ thống
-                        </Text>
-                    </View>
+            {/* Hiển thị loading khi user chưa được load */}
+            {!user ? (
+                <View style={styles.loadingContainer}>
+                    <Text style={styles.loadingText}>Đang tải...</Text>
                 </View>
+            ) : (
+                <SafeAreaView style={styles.safeArea}>
+                    <View style={styles.header}>
+                        {!sidebar && (
+                            <TouchableOpacity 
+                                style={styles.openBtn} 
+                                onPress={() => setSidebar(true)}
+                            >
+                                <Ionicons name="menu" size={28} color="white" />
+                            </TouchableOpacity>
+                        )}
+                        <View style={styles.headerContent}>
+                            <Text style={styles.headerTitle}>
+                                {getTitle()}
+                            </Text>
+                            <Text style={styles.headerSubtitle}>
+                                Quản lý hệ thống
+                            </Text>
+                        </View>
+                    </View>
 
-                <View style={styles.container}>
-                    {sidebar && 
-                        <TouchableWithoutFeedback onPress={() => setSidebar(false)}>
-                            <View style={styles.overPlay}></View>
-                        </TouchableWithoutFeedback>
-                    }
-                    
-                    {sidebar && (
-                        <View style={styles.sidebar}>
-                            <View style={styles.sidebarHeader}>
-                                <View style={styles.userInfo}>
-                                    <View style={styles.avatarContainer}>
-                                        <Text style={styles.avatarText}>
-                                            {user?.fullName?.charAt(0)?.toUpperCase()}
-                                        </Text>
+                    <View style={styles.container}>
+                        {sidebar && 
+                            <TouchableWithoutFeedback onPress={() => setSidebar(false)}>
+                                <View style={styles.overPlay}></View>
+                            </TouchableWithoutFeedback>
+                        }
+                        
+                        {sidebar && (
+                            <View style={styles.sidebar}>
+                                <View style={styles.sidebarHeader}>
+                                    <View style={styles.userInfo}>
+                                        <View style={styles.avatarContainer}>
+                                            <Text style={styles.avatarText}>
+                                                {user?.fullName?.charAt(0)?.toUpperCase()}
+                                            </Text>
+                                        </View>
+                                        <View style={styles.userDetails}>
+                                            <Text style={styles.userName}>
+                                                {user?.fullName}
+                                            </Text>
+                                            <Text style={styles.userRole}>
+                                                Quản trị viên
+                                            </Text>
+                                        </View>
                                     </View>
-                                    <View style={styles.userDetails}>
-                                        <Text style={styles.userName}>
-                                            {user?.fullName}
-                                        </Text>
-                                        <Text style={styles.userRole}>
-                                            Quản trị viên
-                                        </Text>
-                                    </View>
-                                </View>
-                                <TouchableOpacity 
-                                    onPress={() => setSidebar(false)} 
-                                    style={styles.closeBtn}
-                                >
-                                    <Ionicons name="close" size={24} color="white" />
-                                </TouchableOpacity>
-                            </View>
-
-                            <View style={styles.menuContainer}>
-                                {menuItem.map((item) => (
-                                    <TouchableOpacity
-                                        key={item.key}
-                                        style={[
-                                            styles.menuItem,
-                                            selectedMenu === item.key && styles.menuItemActive
-                                        ]}
-                                        onPress={() => {
-                                            if(item.key === '6'){
-                                                handleLogOut();
-                                            }
-                                            setSelectedMenu(item.key);
-                                            setSidebar(false);
-                                        }}
+                                    <TouchableOpacity 
+                                        onPress={() => setSidebar(false)} 
+                                        style={styles.closeBtn}
                                     >
-                                        <Ionicons 
-                                            name={getIconName(item.key)} 
-                                            size={22} 
-                                            color="white" 
-                                        />
-                                        <Text style={styles.menuText}>
-                                            {item.label}
-                                        </Text>
+                                        <Ionicons name="close" size={24} color="white" />
                                     </TouchableOpacity>
-                                ))}
+                                </View>
+
+                                <View style={styles.menuContainer}>
+                                    {menuItem.map((item) => (
+                                        <TouchableOpacity
+                                            key={item.key}
+                                            style={[
+                                                styles.menuItem,
+                                                selectedMenu === item.key && styles.menuItemActive
+                                            ]}
+                                            onPress={() => {
+                                                if(item.key === '6'){
+                                                    handleLogOut();
+                                                }
+                                                setSelectedMenu(item.key);
+                                                setSidebar(false);
+                                            }}
+                                        >
+                                            <Ionicons 
+                                                name={getIconName(item.key)} 
+                                                size={22} 
+                                                color="white" 
+                                            />
+                                            <Text style={styles.menuText}>
+                                                {item.label}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+                            </View>
+                        )}
+
+                        <View style={styles.content}>
+                            <View style={styles.contentContainer}>
+                                {renderItem()}
                             </View>
                         </View>
-                    )}
-
-                    <View style={styles.content}>
-                        <View style={styles.contentContainer}>
-                            {renderItem()}
-                        </View>
                     </View>
-                </View>
-            </SafeAreaView>
+                </SafeAreaView>
+            )}
         </View>
     )
 }
@@ -252,6 +287,17 @@ const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
         backgroundColor: '#000d66',
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#000d66',
+    },
+    loadingText: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: '500',
     },
     header: {
         height: 70,

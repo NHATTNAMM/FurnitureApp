@@ -67,15 +67,17 @@ const LoginScreen = () => {
         // Đợi một chút để UserContext xử lý auth state
         await new Promise(resolve => setTimeout(resolve, 100));
         
-        // Điều hướng dựa trên role
+        // Điều hướng dựa trên role (không phân biệt hoa thường)
         setLoading(false); // Set loading false trước khi navigate
         
-        if (userRole === "shipper") {
+        const roleLower = userRole ? userRole.toLowerCase() : '';
+        
+        if (roleLower === "shipper") {
           navigation.reset({
             index: 0,
             routes: [{ name: 'HomeShipper' }],
           });
-        } else if (userRole === "admin") {
+        } else if (roleLower === "admin") {
           navigation.reset({
             index: 0,
             routes: [{ name: 'AdminHome' }],

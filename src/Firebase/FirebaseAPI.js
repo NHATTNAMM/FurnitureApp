@@ -77,15 +77,11 @@ export const signInUser =  async ({email,password,fullName,phone,address}) =>{
 }
 export const LogIn = async ({email,password})=>{
     try{
-        console.log('Attempting login with email:', email); // Debug log
-        
         // Đảm bảo email được trim để tránh khoảng trắng
         const cleanEmail = email.trim().toLowerCase();
         
         const userGG = await signInWithEmailAndPassword(auth, cleanEmail, password);
         const user = userGG.user;
-        
-        console.log('Firebase auth successful, user UID:', user.uid); // Debug log
 
         // Lấy user document từ Firestore
         const userDoc = await getDoc(doc(db,"User",user.uid));
@@ -93,11 +89,8 @@ export const LogIn = async ({email,password})=>{
             const userData = userDoc.data();
             const role = userData.role;
             
-            console.log('User data retrieved, role:', role); // Debug log
-            
             // Đảm bảo role được trả về chính xác
             if (!role) {
-                console.log('Warning: No role found for user, defaulting to "user"');
                 return { success: true , user: { id: user.uid, role: "user", ...userData } };
             }
             
@@ -105,7 +98,6 @@ export const LogIn = async ({email,password})=>{
             return { success: true , user: { id: user.uid, role, ...userData } };
         }
         else{
-            console.log('User document not found in Firestore'); // Debug log
             // Logout ngay lập tức nếu không tìm thấy user document
             await auth.signOut();
             return{success:false, error :"Tài khoản hoặc mật khẩu không tồn tại" };
@@ -501,6 +493,9 @@ export const checkoutOrders = async (userId, ordersToCheckout) => {
                 updatedAt: new Date(),
                 userId,
                 totalAmount: ordersToCheckout[0].totalAmount,
+                // Thêm thông tin vận chuyển
+                shippingFee: ordersToCheckout[0].shippingFee || 0,
+                shippingDiscount: ordersToCheckout[0].shippingDiscount || 0,
                 // Thêm thông tin thanh toán
                 paymentMethod: ordersToCheckout[0].paymentMethod || 'cod',
                 paymentStatus: ordersToCheckout[0].paymentStatus || 'pending'

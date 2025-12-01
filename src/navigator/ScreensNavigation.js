@@ -26,10 +26,12 @@ import PendingOrders from '../screen/Orders/PendingOrders';
 import InProgressOrders from '../screen/Orders/InProgressOrders';
 import Order from '../screen/Cart/Order';
 import HomeShipper from '../Shipper/HomeShipper';
+import ShipperProfile from '../Shipper/ShipperProfile';
+import ShipperHistory from '../Shipper/ShipperHistory';
 import SearchScreen from '../screen/SearchScreen';
-import BestSellingProducts from '../screen/BestSellingProducts';
 import MyReviewsScreen from '../screen/MyReviewsScreen';
 import AdminChatScreen from '../admin_app/AdminChatScreen';
+import OrderDetailScreen from '../screen/Orders/OrderDetailScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -68,21 +70,12 @@ const ScreensNavigation = () => {
         <Stack.Screen name="ShippingOrders" component={ShippingOrders} options={{ title: 'Chờ giao hàng' }} />
         <Stack.Screen name="CompletedOrders" component={CompletedOrders} options={{ title: 'Đã đặt' }} />
         <Stack.Screen name="InProgressOrders" component={InProgressOrders} options={{ title: 'Đang giao' }} />
+        <Stack.Screen name="OrderDetail" component={OrderDetailScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Order" component={Order} options={{ title: 'Trạng thái đơn hàng' }} />
         <Stack.Screen name="MyReviews" component={MyReviewsScreen} options={{ title: 'Đánh giá của tôi' }} />
         <Stack.Screen name="HomeShipper" component={HomeShipper} options={{ title: 'Nhận đơn hàng' }} />
-        <Stack.Screen 
-          name="BestSellingProducts" 
-          component={BestSellingProducts}
-          options={{
-            headerShown: true,
-            title: 'Sản phẩm bán chạy',
-            headerStyle: {
-              backgroundColor: '#000d66',
-            },
-            headerTintColor: '#fff',
-          }}
-        />
+        <Stack.Screen name="ShipperProfile" component={ShipperProfile} options={{ headerShown: false }} />
+        <Stack.Screen name="ShipperHistory" component={ShipperHistory} options={{ headerShown: false }} />
         <Stack.Screen 
           name="AdminChat" 
           component={AdminChatScreen}
