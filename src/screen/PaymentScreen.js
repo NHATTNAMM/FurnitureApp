@@ -8,6 +8,7 @@ import {
   Image,
   Alert,
   Modal,
+  TextInput,
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { UserContext } from '../Firebase/UserContext';
@@ -20,9 +21,12 @@ const PaymentScreen = ({ navigation, route }) => {
   const [paymentMethod, setPaymentMethod] = useState('cod'); // 'cod', 'qr', hoặc 'ewallet'
   const [showQRModal, setShowQRModal] = useState(false);
   const [showEWalletModal, setShowEWalletModal] = useState(false);
+  const [showOTPModal, setShowOTPModal] = useState(false);
   const [selectedWallet, setSelectedWallet] = useState('momo'); // 'momo', 'zalopay', 'vnpay'
+  const [walletPassword, setWalletPassword] = useState('');
   const [deliveryDistance, setDeliveryDistance] = useState(null); // Khoảng cách giao hàng (km)
   const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
+  const otpInputRef = React.useRef(null);
 
   useEffect(() => {
     // Nhận dữ liệu từ Cart screen
@@ -315,23 +319,45 @@ const PaymentScreen = ({ navigation, route }) => {
 
   const handleConfirmEWallet = () => {
     setShowEWalletModal(false);
+    setWalletPassword('');
+    // Mở modal nhập mật khẩu ví
+    setTimeout(() => {
+      setShowOTPModal(true);
+    }, 300);
+  };
+
+  const handleVerifyWalletPassword = () => {
+    const WALLET_PASSWORD = '123456';
     
-    Alert.alert(
-      "Xác nhận thanh toán",
-      `Bạn sẽ được chuyển đến ứng dụng ${selectedWallet.toUpperCase()} để hoàn tất thanh toán ${formatPrice(getTotal())}đ`,
-      [
-        { text: "Hủy", style: "cancel" },
-        { 
-          text: "Tiếp tục", 
-          onPress: () => {
-            // Giả lập thanh toán thành công sau 2 giây
-            setTimeout(() => {
-              processOrder('ewallet');
-            }, 2000);
-          }
-        }
-      ]
-    );
+    if (walletPassword.trim() === '') {
+      Alert.alert('Thông báo', 'Vui lòng nhập mật khẩu ví');
+      return;
+    }
+    
+    if (walletPassword === WALLET_PASSWORD) {
+      // Mật khẩu đúng - xử lý thanh toán
+      setShowOTPModal(false);
+      setWalletPassword('');
+      
+      Alert.alert(
+        'Xác thực thành công',
+        'Đang xử lý thanh toán...',
+        [{ text: 'OK' }]
+      );
+      
+      // Giả lập xử lý thanh toán
+      setTimeout(() => {
+        processOrder('ewallet');
+      }, 1500);
+    } else {
+      // Mật khẩu sai
+      Alert.alert(
+        'Xác thực thất bại',
+        'Mật khẩu ví không chính xác. Vui lòng thử lại.',
+        [{ text: 'OK' }]
+      );
+      setWalletPassword('');
+    }
   };
 
   const getWalletLogo = (wallet) => {
@@ -794,6 +820,103 @@ const PaymentScreen = ({ navigation, route }) => {
             >
               <Text style={styles.ewalletConfirmText}>Tiếp tục thanh toán</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* OTP/Password Verification Modal */}
+      <Modal
+        visible={showOTPModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => {
+          setShowOTPModal(false);
+          setWalletPassword('');
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.otpModal}>
+            <View style={styles.otpHeader}>
+              <Text style={styles.otpTitle}>Xác thực ví điện tử</Text>
+              <TouchableOpacity onPress={() => {
+                setShowOTPModal(false);
+                setWalletPassword('');
+              }}>
+                <Ionicons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.otpContainer}>
+              <View style={styles.walletInfoBox}>
+                <Image 
+                  source={
+                    selectedWallet === 'momo' ? require('../../assets/images/logomomo.png') :
+                    selectedWallet === 'zalopay' ? require('../../assets/images/logozalopay.png') :
+                    require('../../assets/images/logovnpay.png')
+                  }
+                  style={styles.walletLogoLarge}
+                  resizeMode="contain"
+                />
+                <Text style={styles.walletNameLarge}>{selectedWallet.toUpperCase()}</Text>
+              </View>
+              
+              <Text style={styles.otpAmount}>Số tiền: {formatPrice(getTotal())}đ</Text>
+              
+              <View style={styles.otpInputContainer}>
+                <Text style={styles.otpLabel}>Nhập mật khẩu ví</Text>
+                <TouchableOpacity 
+                  activeOpacity={1}
+                  onPress={() => otpInputRef.current?.focus()}
+                  style={styles.otpBoxesWrapper}
+                >
+                  <View style={styles.otpBoxesContainer}>
+                    {[0, 1, 2, 3, 4, 5].map((index) => (
+                      <View key={index} style={styles.otpBox}>
+                        <Text style={styles.otpBoxText}>
+                          {walletPassword[index] ? '•' : ''}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                  <TextInput
+                    ref={otpInputRef}
+                    style={styles.otpHiddenInput}
+                    value={walletPassword}
+                    onChangeText={setWalletPassword}
+                    keyboardType="numeric"
+                    maxLength={6}
+                    autoFocus={true}
+                    caretHidden={true}
+                  />
+                </TouchableOpacity>
+              </View>
+              
+              <View style={styles.otpNote}>
+                <MaterialIcons name="info-outline" size={16} color="#666" />
+                <Text style={styles.otpNoteText}>
+                  Nhập mật khẩu ví để xác thực giao dịch
+                </Text>
+              </View>
+            </View>
+            
+            <View style={styles.otpActions}>
+              <TouchableOpacity 
+                style={styles.otpCancelButton} 
+                onPress={() => {
+                  setShowOTPModal(false);
+                  setWalletPassword('');
+                }}
+              >
+                <Text style={styles.otpCancelText}>Hủy</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.otpConfirmButton} 
+                onPress={handleVerifyWalletPassword}
+              >
+                <Text style={styles.otpConfirmText}>Xác nhận</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1450,6 +1573,164 @@ const styles = StyleSheet.create({
   },
   ewalletConfirmText: {
     fontSize: 16,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  // OTP Modal
+  otpModal: {
+    backgroundColor: '#fff',
+    margin: 20,
+    borderRadius: 16,
+    padding: 20,
+    maxWidth: 400,
+    width: '90%',
+  },
+  otpHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  otpTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    flex: 1,
+  },
+  otpContainer: {
+    marginBottom: 20,
+  },
+  walletInfoBox: {
+    alignItems: 'center',
+    backgroundColor: '#F8F9FF',
+    padding: 20,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  walletLogoLarge: {
+    width: 60,
+    height: 60,
+    marginBottom: 8,
+  },
+  walletNameLarge: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#000D66',
+  },
+  otpAmount: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#000D66',
+    textAlign: 'center',
+    marginBottom: 20,
+    paddingVertical: 12,
+    backgroundColor: '#FFF3E0',
+    borderRadius: 8,
+  },
+  otpInputContainer: {
+    marginBottom: 16,
+  },
+  otpLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  otpBoxesWrapper: {
+    position: 'relative',
+  },
+  otpBoxesContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    paddingHorizontal: 10,
+  },
+  otpBox: {
+    width: 45,
+    height: 55,
+    borderWidth: 2,
+    borderColor: '#000D66',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FF',
+  },
+  otpBoxText: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: '#000D66',
+  },
+  otpHiddenInput: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.01,
+  },
+  otpInput: {
+    borderWidth: 2,
+    borderColor: '#000D66',
+    borderRadius: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+    letterSpacing: 8,
+    backgroundColor: '#fff',
+  },
+  otpHint: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 8,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  otpNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F4FF',
+    padding: 12,
+    borderRadius: 8,
+  },
+  otpNoteText: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 6,
+    flex: 1,
+    lineHeight: 16,
+  },
+  otpActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  otpCancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginRight: 8,
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  otpCancelText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  otpConfirmButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: '#000D66',
+    marginLeft: 8,
+    alignItems: 'center',
+  },
+  otpConfirmText: {
+    fontSize: 14,
     color: '#fff',
     fontWeight: '600',
   },

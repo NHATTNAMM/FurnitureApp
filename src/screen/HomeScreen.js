@@ -63,6 +63,11 @@ const HomeScreen = () => {
     const [favoriteItems, setFavoriteItems] = useState([]);
     const scrollY = new Animated.Value(0);
     const [addressModalVisible, setAddressModalVisible] = useState(false);
+    const [priceFilterModalVisible, setPriceFilterModalVisible] = useState(false);
+    const [minPrice, setMinPrice] = useState('');
+    const [maxPrice, setMaxPrice] = useState('');
+    const [tempMinPrice, setTempMinPrice] = useState('');
+    const [tempMaxPrice, setTempMaxPrice] = useState('');
 
     const openModal = (furnitureItem) => {
       if (furnitureItem !== selectedFurniture){
@@ -131,15 +136,31 @@ const HomeScreen = () => {
     }, []);
 
     useEffect(() => {
+      let filtered = furnitureData;
+      
+      // Lọc theo tag
       if (selectedTag === 'Tất cả'){
-        setFilteredFurniture(furnitureData);
+        filtered = furnitureData;
       } else if(selectedTag !== null) {
-        const filtered = furnitureData.filter(item => Array.isArray(item.tag) && item.tag.includes(selectedTag));
-        setFilteredFurniture(filtered);
-      } else {
-        setFilteredFurniture(furnitureData);
+        filtered = furnitureData.filter(item => Array.isArray(item.tag) && item.tag.includes(selectedTag));
       }
-    }, [selectedTag, furnitureData]); 
+      
+      // Lọc theo giá
+      if (minPrice !== '' || maxPrice !== '') {
+        filtered = filtered.filter(item => {
+          const itemPrice = item.discountPercentage > 0 
+            ? item.furniturePrice * (1 - item.discountPercentage / 100)
+            : item.furniturePrice;
+          
+          const min = minPrice === '' ? 0 : parseFloat(minPrice);
+          const max = maxPrice === '' ? Infinity : parseFloat(maxPrice);
+          
+          return itemPrice >= min && itemPrice <= max;
+        });
+      }
+      
+      setFilteredFurniture(filtered);
+    }, [selectedTag, furnitureData, minPrice, maxPrice]); 
     
     const handleTag = (tag) => {
       if (selectedTag === tag) {
@@ -183,6 +204,36 @@ const HomeScreen = () => {
       return address.length > maxLen ? '...' + address.slice(-maxLen) : address;
     };
 
+    const handleApplyPriceFilter = () => {
+      const min = parseFloat(tempMinPrice);
+      const max = parseFloat(tempMaxPrice);
+      
+      if (tempMinPrice !== '' && tempMaxPrice !== '' && min > max) {
+        Alert.alert('Lỗi', 'Giá tối thiểu không được lớn hơn giá tối đa');
+        return;
+      }
+      
+      setMinPrice(tempMinPrice);
+      setMaxPrice(tempMaxPrice);
+      setPriceFilterModalVisible(false);
+    };
+
+    const handleResetPriceFilter = () => {
+      setTempMinPrice('');
+      setTempMaxPrice('');
+      setMinPrice('');
+      setMaxPrice('');
+      setPriceFilterModalVisible(false);
+    };
+
+    const openPriceFilterModal = () => {
+      setTempMinPrice(minPrice);
+      setTempMaxPrice(maxPrice);
+      setPriceFilterModalVisible(true);
+    };
+
+    const hasActiveFilter = minPrice !== '' || maxPrice !== '';
+
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
@@ -201,13 +252,27 @@ const HomeScreen = () => {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity 
-              style={styles.searchBar}
-              onPress={() => navigation.navigate('SearchScreen')}
-            >
-              <Feather name="search" size={20} color="#666" style={styles.searchIcon} />
-              <Text style={styles.searchText}>Tìm kiếm sản phẩm...</Text>
-            </TouchableOpacity>
+            <View style={styles.searchRow}>
+              <TouchableOpacity 
+                style={styles.searchBar}
+                onPress={() => navigation.navigate('SearchScreen')}
+              >
+                <Feather name="search" size={20} color="#666" style={styles.searchIcon} />
+                <Text style={styles.searchText}>Tìm kiếm sản phẩm...</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.filterButton, hasActiveFilter && styles.filterButtonActive]}
+                onPress={openPriceFilterModal}
+              >
+                <Ionicons 
+                  name="filter" 
+                  size={20} 
+                  color={hasActiveFilter ? '#fff' : '#000D66'} 
+                />
+                {hasActiveFilter && <View style={styles.filterDot} />}
+              </TouchableOpacity>
+            </View>
           </View>
 
         {/* Fixed Categories */}
@@ -373,6 +438,114 @@ const HomeScreen = () => {
           </View>
         </Modal>
 
+        {/* Modal lọc theo giá */}
+        <Modal
+          visible={priceFilterModalVisible}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setPriceFilterModalVisible(false)}
+        >
+          <View style={styles.priceFilterModalOverlay}>
+            <View style={styles.priceFilterModalContent}>
+              <View style={styles.priceFilterHeader}>
+                <Text style={styles.priceFilterTitle}>Lọc theo giá</Text>
+                <TouchableOpacity onPress={() => setPriceFilterModalVisible(false)}>
+                  <Ionicons name="close" size={24} color="#666" />
+                </TouchableOpacity>
+              </View>
+              
+              <View style={styles.priceInputContainer}>
+                <View style={styles.priceInputWrapper}>
+                  <Text style={styles.priceInputLabel}>Giá tối thiểu (đ)</Text>
+                  <TextInput
+                    style={styles.priceInput}
+                    placeholder="0"
+                    value={tempMinPrice}
+                    onChangeText={setTempMinPrice}
+                    keyboardType="numeric"
+                  />
+                </View>
+                
+                <View style={styles.priceSeparator}>
+                  <View style={styles.priceLine} />
+                </View>
+                
+                <View style={styles.priceInputWrapper}>
+                  <Text style={styles.priceInputLabel}>Giá tối đa (đ)</Text>
+                  <TextInput
+                    style={styles.priceInput}
+                    placeholder="Không giới hạn"
+                    value={tempMaxPrice}
+                    onChangeText={setTempMaxPrice}
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
+              
+              <View style={styles.quickPriceOptions}>
+                <Text style={styles.quickPriceLabel}>Lựa chọn nhanh:</Text>
+                <View style={styles.quickPriceButtons}>
+                  <TouchableOpacity 
+                    style={styles.quickPriceButton}
+                    onPress={() => {
+                      setTempMinPrice('0');
+                      setTempMaxPrice('5000000');
+                    }}
+                  >
+                    <Text style={styles.quickPriceButtonText}>Dưới 5 triệu</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={styles.quickPriceButton}
+                    onPress={() => {
+                      setTempMinPrice('5000000');
+                      setTempMaxPrice('10000000');
+                    }}
+                  >
+                    <Text style={styles.quickPriceButtonText}>5-10 triệu</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={styles.quickPriceButton}
+                    onPress={() => {
+                      setTempMinPrice('10000000');
+                      setTempMaxPrice('20000000');
+                    }}
+                  >
+                    <Text style={styles.quickPriceButtonText}>10-20 triệu</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={styles.quickPriceButton}
+                    onPress={() => {
+                      setTempMinPrice('20000000');
+                      setTempMaxPrice('');
+                    }}
+                  >
+                    <Text style={styles.quickPriceButtonText}>Trên 20 triệu</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              
+              <View style={styles.priceFilterActions}>
+                <TouchableOpacity 
+                  style={styles.priceResetButton}
+                  onPress={handleResetPriceFilter}
+                >
+                  <Text style={styles.priceResetButtonText}>Đặt lại</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.priceApplyButton}
+                  onPress={handleApplyPriceFilter}
+                >
+                  <Text style={styles.priceApplyButtonText}>Áp dụng</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
         {/* Chat Button */}
         <ChatButton />
       </SafeAreaView>
@@ -443,13 +616,40 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
   },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   searchBar: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F3F4F6',
     borderRadius: 30,
     paddingHorizontal: 20,
     height: 48,
+  },
+  filterButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 30,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  filterButtonActive: {
+    backgroundColor: '#000D66',
+  },
+  filterDot: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#ff4444',
   },
   searchIcon: {
     marginRight: 10,
@@ -647,6 +847,119 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: 'bold',
+  },
+  priceFilterModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  priceFilterModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 40,
+  },
+  priceFilterHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  priceFilterTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#000D66',
+  },
+  priceInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  priceInputWrapper: {
+    flex: 1,
+  },
+  priceInputLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 8,
+    fontWeight: '500',
+  },
+  priceInput: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#000D66',
+    fontWeight: '600',
+  },
+  priceSeparator: {
+    width: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+  },
+  priceLine: {
+    width: 12,
+    height: 2,
+    backgroundColor: '#000D66',
+  },
+  quickPriceOptions: {
+    marginBottom: 24,
+  },
+  quickPriceLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 12,
+    fontWeight: '500',
+  },
+  quickPriceButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  quickPriceButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  quickPriceButtonText: {
+    fontSize: 13,
+    color: '#000D66',
+    fontWeight: '600',
+  },
+  priceFilterActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  priceResetButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+  },
+  priceResetButtonText: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '600',
+  },
+  priceApplyButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#000D66',
+    alignItems: 'center',
+  },
+  priceApplyButtonText: {
+    fontSize: 16,
+    color: '#fff',
+    fontWeight: '600',
   },
 });
 
