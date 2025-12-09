@@ -193,18 +193,13 @@ export const getGeminiResponse = async (userMessage, context = {}) => {
   } catch (error) {
     console.error('Gemini API Error:', error);
     
-    // Return fallback response
-    return {
-      text: 'Xin lỗi, tôi đang gặp chút vấn đề. Vui lòng:\n\n' +
-        '🔄 Thử lại sau vài giây\n' +
-        '� Chat với admin để được hỗ trợ ngay\n' +
-        '📞 Hotline: 0356 057 547\n' +
-        '📧 Email: support@furniturestore.com',
-      suggestions: ['Thử lại', 'Chat với admin', 'Xem sản phẩm'],
-      source: 'fallback',
-      confidence: 0.1,
-      error: error.message,
-    };
+    // Check if it's a quota error
+    if (error.message && error.message.includes('quota')) {
+      console.warn('⚠️ Gemini API quota exceeded - will use pattern matching fallback');
+    }
+    
+    // Throw error to let ChatAPI handle fallback to pattern matching
+    throw error;
   }
 };
 

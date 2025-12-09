@@ -407,18 +407,38 @@ export const getChatbotResponse = async (userMessage, userId) => {
     } catch (geminiError) {
       console.error('❌ Gemini AI Error:', geminiError);
       
-      // Fallback to local pattern matching if Gemini fails
-      console.log('⚠️ Falling back to local pattern matching...');
-      return await getLocalPatternResponse(message, userId, userData);
+      // Check if it's quota error
+      const isQuotaError = geminiError.message && geminiError.message.includes('quota');
+      if (isQuotaError) {
+        console.log('💡 Gemini API quota exceeded - using smart pattern matching instead');
+      } else {
+        console.log('⚠️ Gemini unavailable - falling back to local pattern matching...');
+      }
+      
+      // Fallback to local pattern matching
+      const fallbackResponse = await getLocalPatternResponse(message, userId, userData);
+      
+      // Add a subtle note only if pattern matching also has low confidence
+      if (fallbackResponse.confidence < 0.5 && !isQuotaError) {
+        fallbackResponse.text = fallbackResponse.text + 
+          '\n\n💬 Bạn cũng có thể chat với admin để được hỗ trợ tốt hơn!';
+        if (!fallbackResponse.suggestions.includes('Chat với admin')) {
+          fallbackResponse.suggestions.unshift('Chat với admin');
+        }
+      }
+      
+      return fallbackResponse;
     }
   } catch (error) {
     console.error('Error in chatbot response:', error);
     return {
-      text: '❌ Xin lỗi, đã có lỗi xảy ra. Vui lòng:\n\n' +
-        '🔄 Thử lại\n' +
-        '💬 Chat với admin\n' +
-        '📞 Hotline: 0356 057 547',
-      suggestions: ['Thử lại', 'Chat với admin', 'Trợ giúp'],
+      text: '🙏 Rất xin lỗi vì sự bất tiện này!\n\n' +
+        'Tôi đang gặp một chút vấn đề kỹ thuật. Bạn vui lòng:\n\n' +
+        '🔄 Thử lại sau giây lát\n' +
+        '💬 Chat trực tiếp với admin (nhanh hơn)\n' +
+        '📞 Gọi hotline: 0356 057 547\n\n' +
+        'Chúng tôi luôn sẵn sàng hỗ trợ bạn! ❤️',
+      suggestions: ['Thử lại', 'Chat admin', 'Xem sản phẩm'],
       source: 'error',
       confidence: 0,
     };
@@ -447,92 +467,122 @@ const detectIntent = (message) => {
 const getLocalPatternResponse = async (message, userId, userData) => {
   // Extract useful info from message
   const numbers = extractNumbers(message);
+  const lowerMessage = message.toLowerCase().trim();
 
-  // ENHANCED Intent Detection with fuzzy matching & context awareness
-  const intents = {
-      // Greeting - Enhanced with context
-      greeting: /^(hi|hello|xin chào|chào|hey|hế lu|hế lô|alo|chao|xinchao)/i,
+  // ENHANCED Intent Detection with PRIORITY SYSTEM
+  // Higher priority = more specific patterns, checked first
+  const intents = [
+    // PRIORITY 1: Very specific patterns (exact matches)
+    { name: 'greeting', priority: 1, pattern: /^(hi|hello|xin chào|chào|hey|hế lu|hế lô|alo|chao|xinchao|chao ban|xin chao|ê|êi|chào bạn)$/i },
+    { name: 'yes', priority: 1, pattern: /^(yes|có|co|ok|được|duoc|đồng ý|dong y|oke|okay|uhm|uh|đúng|dung)$/i },
+    { name: 'no', priority: 1, pattern: /^(no|không|khong|ko|k|thôi|thoi|bye|tạm biệt|tam biet)$/i },
+    { name: 'thanks', priority: 1, pattern: /(cảm ơn|cam on|camon|thanks|thank you|cám ơn|cam on)/i },
 
-      // Product related - Enhanced with fuzzy matching
-      productInfo: /(thông tin|thong tin|chi tiết|chi tiet|mô tả|mo ta|giá|gia|kích thước|kich thuoc|chất liệu|chat lieu|màu sắc|mau sac).*(sản phẩm|san pham|sp|nội thất|noi that|bàn|ban|ghế|ghe|tủ|tu|giường|giuong|sofa)/i,
-      productSearch: /(tìm|tim|search|xem|có|co|bán|ban|mua).*(sản phẩm|san pham|sp|nội thất|noi that|bàn|ban|ghế|ghe|tủ|tu|giường|giuong|sofa|furniture)/i,
-      productStock: /(còn hàng|con hang|hết hàng|het hang|tồn kho|ton kho|có sẵn|co san|availability|stock)/i,
-      productDiscount: /(giảm giá|giam gia|khuyến mãi|khuyen mai|sale|discount|ưu đãi|uu dai|promotions?)/i,
-      bestSeller: /(bán chạy|ban chay|phổ biến|pho bien|hot|best seller|top|nổi bật|noi bat|trending)/i,
+    // PRIORITY 2: Specific multi-word patterns
+    { name: 'shippingFee', priority: 2, pattern: /(phí ship|phi ship|phí giao hàng|phi giao hang|phí vận chuyển|phi van chuyen|ship fee|miễn phí ship|mien phi ship|free ship)/i },
+    { name: 'shippingTime', priority: 2, pattern: /(thời gian giao|thoi gian giao|mấy ngày giao|may ngay giao|bao lâu giao|bao lau giao|khi nào đến|khi nao den|delivery time)/i },
+    { name: 'orderDelivery', priority: 2, pattern: /(thông tin giao hàng|thong tin giao hang|thông tin vận chuyển|thong tin van chuyen|quy trình giao|quy trinh giao)/i },
+    { name: 'storeHours', priority: 2, pattern: /(giờ mở cửa|gio mo cua|giờ làm việc|gio lam viec|mở cửa|mo cua|đóng cửa|dong cua|working hours|opening hours|mấy giờ mở|may gio mo)/i },
+    { name: 'storeLocation', priority: 2, pattern: /(địa chỉ|dia chi|ở đâu|o dau|cửa hàng ở đâu|cua hang o dau|location|address|vị trí|vi tri)/i },
+    { name: 'bestSeller', priority: 2, pattern: /(bán chạy|ban chay|phổ biến|pho bien|hot|best seller|top|nổi bật|noi bat|trending|nhiều người mua|nhieu nguoi mua)/i },
+    { name: 'productDiscount', priority: 2, pattern: /(giảm giá|giam gia|khuyến mãi|khuyen mai|sale|discount|ưu đãi|uu dai|promotions?|giá tốt|gia tot|rẻ|re|giá rẻ|gia re|km)/i },
+    { name: 'forgotPassword', priority: 2, pattern: /(quên mật khẩu|quen mat khau|forgot password|reset password|đặt lại mật khẩu|dat lai mat khau|quên pass|quen pass)/i },
+    { name: 'returnPolicy', priority: 2, pattern: /(chính sách đổi trả|chinh sach doi tra|return policy|refund policy|đổi trả như thế nào|doi tra nhu the nao|hoàn tiền|hoan tien)/i },
+    { name: 'orderCancel', priority: 2, pattern: /(hủy đơn|huy don|cancel order|không muốn mua|khong muon mua|xóa đơn|xoa don|hủy|huy)/i },
+    { name: 'orderReturn', priority: 2, pattern: /(đổi trả|doi tra|hoàn trả|hoan tra|return|trả hàng|tra hang|refund|đổi|doi|trả|tra)/i },
+    { name: 'productBudget', priority: 2, pattern: /(ngân sách|ngan sach|budget|bao nhiêu tiền|bao nhieu tien|khoảng bao nhiêu|khoang bao nhieu|từ .* đến|tu .* den|giá từ|gia tu)/i },
+    { name: 'productCombo', priority: 2, pattern: /(bộ sản phẩm|bo san pham|combo|set|đôi|doi|cặp|cap|ghép|ghep|kèm|kem|đi kèm|di kem)/i },
+    { name: 'installation', priority: 2, pattern: /(lắp đặt|lap dat|lắp ráp|lap rap|cài đặt|cai dat|install|assembly|hướng dẫn lắp|huong dan lap)/i },
+    { name: 'maintenance', priority: 2, pattern: /(bảo quản|bao quan|bảo dưỡng|bao duong|vệ sinh|ve sinh|chăm sóc|cham soc|maintenance|clean|làm sạch|lam sach)/i },
 
-      // Order related - Enhanced with context & fuzzy
-      orderStatus: /(đơn hàng|don hang|donhang|order|kiểm tra đơn|kiem tra don|trạng thái đơn|trang thai don|theo dõi đơn|theo doi don|track)/i,
-      orderCreate: /(đặt hàng|dat hang|dathang|mua|order|thanh toán|thanh toan|checkout|place order)/i,
-      orderCancel: /(hủy đơn|huy don|cancel|không muốn mua|khong muon mua|xóa đơn|xoa don)/i,
-      orderReturn: /(đổi trả|doi tra|hoàn trả|hoan tra|return|trả hàng|tra hang|refund)/i,
+    // PRIORITY 3: Product-specific patterns
+    { name: 'productStock', priority: 3, pattern: /(còn hàng|con hang|hết hàng|het hang|tồn kho|ton kho|có sẵn|co san|availability|stock|sẵn|san|còn|con|hết|het)/i },
+    { name: 'productSize', priority: 3, pattern: /(size|kích thước|kich thuoc|kích cỡ|kich co|to|nhỏ|nho|lớn|lon|rộng|rong|dài|dai|cao|ngang)/i },
+    { name: 'productColor', priority: 3, pattern: /(màu|mau|màu sắc|mau sac|color|trắng|trang|đen|den|nâu|nau|xám|xam|xanh|vàng|vang|đỏ|do)/i },
+    { name: 'productStyle', priority: 3, pattern: /(phong cách|phong cach|style|hiện đại|hien dai|cổ điển|co dien|tối giản|toi gian|bắc âu|bac au|minimalist|scandinavian|vintage)/i },
+    { name: 'productRoom', priority: 3, pattern: /(phòng khách|phong khach|phòng ngủ|phong ngu|phòng làm việc|phong lam viec|phòng bếp|phong bep|phòng ăn|phong an|living room|bedroom|office)/i },
+    { name: 'productMaterial', priority: 3, pattern: /(chất liệu|chat lieu|gỗ|go|kim loại|kim loai|da|vải|vai|nhựa|nhua|gỗ công nghiệp|go cong nghiep|gỗ tự nhiên|go tu nhien|inox|thép|thep)/i },
+    { name: 'productCompare', priority: 3, pattern: /(so sánh|so sanh|khác nhau|khac nhau|khác gì|khac gi|tốt hơn|tot hon|nên chọn|nen chon|hay|hoặc|hoac|khác biệt|khac biet|hơn|hon)/i },
+    { name: 'productRecommend', priority: 3, pattern: /(gợi ý|goi y|đề xuất|de xuat|tư vấn sản phẩm|tu van san pham|nên mua|nen mua|phù hợp|phu hop|recommend|suggest)/i },
+    { name: 'productInfo', priority: 3, pattern: /(thông tin|thong tin|chi tiết|chi tiet|mô tả|mo ta).*(sản phẩm|san pham|sp|nội thất|noi that|bàn|ban|ghế|ghe|tủ|tu|giường|giuong|sofa)/i },
+    { name: 'productSearch', priority: 3, pattern: /(tìm|tim|search|xem|có|co|bán|ban|mua|cho|muốn|muon|cần|can|kiếm|kiem).*(sản phẩm|san pham|sp|nội thất|noi that|bàn|ban|ghế|ghe|tủ|tu|giường|giuong|sofa|kệ|ke|furniture|đồ|đò)/i },
 
-      // Cart related - Enhanced
-      cart: /(giỏ hàng|gio hang|giohang|cart|shopping cart|giỏ|gio)/i,
-      addToCart: /(thêm vào giỏ|them vao gio|add to cart|cho vào giỏ|cho vao gio|thêm giỏ|them gio)/i,
+    // PRIORITY 4: General patterns
+    { name: 'orderStatus', priority: 4, pattern: /(đơn hàng|don hang|donhang|order|kiểm tra đơn|kiem tra don|trạng thái đơn|trang thai don|theo dõi đơn|theo doi don|track)/i },
+    { name: 'orderCreate', priority: 4, pattern: /(đặt hàng|dat hang|dathang|order|checkout|place order)/i },
+    { name: 'cart', priority: 4, pattern: /(giỏ hàng|gio hang|giohang|cart|shopping cart|giỏ|gio)/i },
+    { name: 'addToCart', priority: 4, pattern: /(thêm vào giỏ|them vao gio|add to cart|cho vào giỏ|cho vao gio|thêm giỏ|them gio)/i },
+    { name: 'account', priority: 4, pattern: /(tài khoản|tai khoan|taikhoan|account|profile|thông tin cá nhân|thong tin ca nhan|info|hồ sơ|ho so)/i },
+    { name: 'login', priority: 4, pattern: /(đăng nhập|dang nhap|dangnhap|login|sign in|signin)/i },
+    { name: 'register', priority: 4, pattern: /(đăng ký|dang ky|dangky|register|sign up|signup|tạo tài khoản|tao tai khoan)/i },
+    { name: 'favorites', priority: 4, pattern: /(yêu thích|yeu thich|yeuthich|favorite|wishlist|danh sách yêu thích|danh sach yeu thich|wish list)/i },
+    { name: 'payment', priority: 4, pattern: /(thanh toán|thanh toan|thanhtoan|payment|phương thức thanh toán|phuong thuc thanh toan|pay|trả tiền|tra tien|cod|chuyển khoản|chuyen khoan|ví điện tử|vi dien tu|momo|zalopay)/i },
+    { name: 'warranty', priority: 4, pattern: /(bảo hành|bao hanh|baohanh|warranty|guarantee|bh|đảm bảo|dam bao)/i },
+    { name: 'contact', priority: 4, pattern: /(liên hệ|lien he|lienhe|contact|support|hỗ trợ|ho tro|hotro|admin|help desk|gọi|goi|phone|số điện thoại|so dien thoai|hotline)/i },
+    { name: 'help', priority: 4, pattern: /(giúp|giup|help|hướng dẫn|huong dan|huongdan|guide|tutorial|hdsd|cách|cach|làm sao|lam sao|thế nào|the nao)/i },
+    { name: 'review', priority: 4, pattern: /(đánh giá|danh gia|danhgia|review|rating|nhận xét|nhan xet|comment|feedback|sao|star)/i },
+  ];
 
-      // Account related - Enhanced
-      account: /(tài khoản|tai khoan|taikhoan|account|profile|thông tin cá nhân|thong tin ca nhan|info)/i,
-      login: /(đăng nhập|dang nhap|dangnhap|login|sign in|signin)/i,
-      register: /(đăng ký|dang ky|dangky|register|sign up|signup|tạo tài khoản|tao tai khoan)/i,
-      forgotPassword: /(quên mật khẩu|quen mat khau|forgot password|reset password|đặt lại mật khẩu|dat lai mat khau)/i,
-
-      // Favorites - Enhanced
-      favorites: /(yêu thích|yeu thich|yeuthich|favorite|wishlist|danh sách yêu thích|danh sach yeu thich|wish list)/i,
-
-      // Shipping - Enhanced
-      shipping: /(giao hàng|giao hang|giaohang|vận chuyển|van chuyen|vanchuyen|ship|delivery|thời gian giao|thoi gian giao|ship fee)/i,
-
-      // Payment - Enhanced  
-      payment: /(thanh toán|thanh toan|thanhtoan|payment|phương thức thanh toán|phuong thuc thanh toan|pay|trả tiền|tra tien|cod)/i,
-
-      // Policy - Enhanced
-      warranty: /(bảo hành|bao hanh|baohanh|warranty|guarantee|bh)/i,
-      returnPolicy: /(chính sách đổi trả|chinh sach doi tra|return policy|refund policy|đổi trả|doi tra)/i,
-
-      // Support - Enhanced
-      contact: /(liên hệ|lien he|lienhe|contact|support|hỗ trợ|ho tro|hotro|admin|help desk)/i,
-      help: /(giúp|giup|help|hướng dẫn|huong dan|huongdan|guide|tutorial|hdsd)/i,
-
-      // Reviews - Enhanced
-      review: /(đánh giá|danh gia|danhgia|review|rating|nhận xét|nhan xet|comment|feedback)/i,
-      
-      // NEW: Smart follow-up intents
-      yes: /^(yes|có|co|ok|được|duoc|đồng ý|dong y|oke|okay|uhm|uh|đúng|dung)/i,
-      no: /^(no|không|khong|ko|k|thôi|thoi|bye|tạm biệt|tam biet)/i,
-      thanks: /(cảm ơn|cam on|camon|thanks|thank you|cám ơn|cam on)/i,
-    };
-
-    // Check intents with confidence scoring
-    let bestIntent = null;
-    let bestConfidence = 0;
-    
-    for (const [intent, pattern] of Object.entries(intents)) {
-      if (pattern.test(message)) {
-        bestIntent = intent;
-        bestConfidence = 0.9; // High confidence for pattern match
-        break;
-      }
+  // Find all matching intents with their priorities
+  const matches = [];
+  for (const intent of intents) {
+    if (intent.pattern.test(message)) {
+      matches.push(intent);
     }
+  }
 
-    // If intent found with high confidence, use local handler
-    if (bestIntent && bestConfidence >= 0.8) {
-      const response = await handleIntent(bestIntent, message, userId, userData);
-      return {
-        ...response,
-        source: 'local-fallback',
-        confidence: bestConfidence,
-      };
-    }
+  // Sort by priority (lower number = higher priority)
+  matches.sort((a, b) => a.priority - b.priority);
 
-    // Final fallback if no pattern matched
+  // Use the highest priority match
+  if (matches.length > 0) {
+    const bestIntent = matches[0].name;
+    const response = await handleIntent(bestIntent, message, userId, userData);
     return {
-      text: '🤖 Xin lỗi, tôi chưa hiểu rõ yêu cầu. Bạn có thể hỏi về:\n\n' +
-        '🛋️ Sản phẩm nội thất\n' +
-        '📦 Đơn hàng\n' +
-        '🛒 Giỏ hàng\n' +
-        '� Hỗ trợ\n\n' +
-        'Hoặc chat với admin để được hỗ trợ!',
-      suggestions: ['Xem sản phẩm', 'Kiểm tra đơn hàng', 'Chat admin'],
+      ...response,
+      source: 'local-fallback',
+      confidence: 0.9,
+    };
+  }
+
+    // Final fallback if no pattern matched - Polite and helpful with variety
+    const fallbackMessages = [
+      {
+        text: '😊 Xin lỗi, tôi chưa hiểu rõ câu hỏi của bạn.\n\n' +
+          'Bạn có thể diễn đạt lại theo cách khác hoặc hỏi tôi về:\n\n' +
+          '• 🛋️ Tìm kiếm và tư vấn sản phẩm\n' +
+          '• 📦 Kiểm tra trạng thái đơn hàng\n' +
+          '• 🛒 Quản lý giỏ hàng\n' +
+          '• 💳 Hướng dẫn thanh toán\n' +
+          '• 🔄 Chính sách đổi trả\n\n' +
+          '👉 Hoặc chat trực tiếp với admin để được tư vấn chi tiết hơn!',
+      },
+      {
+        text: '🙏 Rất tiếc, tôi chưa nắm bắt được ý của bạn.\n\n' +
+          'Bạn hãy thử hỏi lại bằng cách khác hoặc để tôi gợi ý một số chủ đề:\n\n' +
+          '🔍 "Tìm ghế sofa giá rẻ"\n' +
+          '📦 "Kiểm tra đơn hàng của tôi"\n' +
+          '⭐ "Sản phẩm bán chạy"\n' +
+          '🎁 "Có khuyến mãi gì không"\n' +
+          '📞 "Thông tin liên hệ"\n\n' +
+          'Tôi luôn sẵn sàng hỗ trợ bạn! 😊',
+      },
+      {
+        text: '👋 Xin chào! Có vẻ câu hỏi của bạn khá phức tạp...\n\n' +
+          'Để tôi hỗ trợ bạn tốt nhất, bạn có thể:\n\n' +
+          '1️⃣ Hỏi cụ thể hơn (ví dụ: "Xem ghế gaming")\n' +
+          '2️⃣ Chọn một trong các chủ đề bên dưới\n' +
+          '3️⃣ Chat trực tiếp với admin để được tư vấn nhanh hơn\n\n' +
+          'Tôi đang học hỏi để phục vụ bạn tốt hơn mỗi ngày! 💪',
+      },
+    ];
+    
+    // Randomly select a fallback message for variety
+    const selectedMessage = fallbackMessages[Math.floor(Math.random() * fallbackMessages.length)];
+    
+    return {
+      text: selectedMessage.text,
+      suggestions: ['Xem sản phẩm', 'Sản phẩm bán chạy', 'Giảm giá', 'Chat admin'],
       source: 'fallback',
       confidence: 0.1,
     };
@@ -585,42 +635,81 @@ const handleIntent = async (intent, message, userId, userData) => {
       const searchQuery = message.toLowerCase();
       let furnitures = await getTopFurnitures(5);
       
-      // Try to filter by keywords in message
-      const keywords = ['ghế', 'ghe', 'bàn', 'ban', 'sofa', 'tủ', 'tu', 'giường', 'giuong', 'kệ', 'ke'];
-      const matchedKeyword = keywords.find(kw => fuzzyMatch(searchQuery, kw, 0.7));
+      // Enhanced keyword detection with more categories
+      const productCategories = {
+        'ghế': ['ghế', 'ghe', 'chair'],
+        'bàn': ['bàn', 'ban', 'table', 'desk'],
+        'sofa': ['sofa', 'ghế sofa', 'ghe sofa'],
+        'tủ': ['tủ', 'tu', 'cabinet', 'tủ quần áo', 'tu quan ao'],
+        'giường': ['giường', 'giuong', 'bed', 'giường ngủ', 'giuong ngu'],
+        'kệ': ['kệ', 'ke', 'shelf', 'kệ sách', 'ke sach'],
+      };
       
-      if (matchedKeyword) {
+      let matchedCategory = null;
+      for (const [category, keywords] of Object.entries(productCategories)) {
+        if (keywords.some(kw => searchQuery.includes(kw))) {
+          matchedCategory = category;
+          break;
+        }
+      }
+      
+      // Filter by matched category
+      if (matchedCategory) {
         const allFurnitures = await getTopFurnitures(20);
-        furnitures = allFurnitures.filter(p => 
-          fuzzyMatch(p.furnitureName.toLowerCase(), matchedKeyword, 0.6)
-        ).slice(0, 5);
+        furnitures = allFurnitures.filter(p => {
+          const nameLower = p.furnitureName.toLowerCase();
+          return productCategories[matchedCategory].some(kw => nameLower.includes(kw));
+        }).slice(0, 5);
       }
       
       if (furnitures.length > 0) {
-        const productList = furnitures.map((p, i) => 
-          `${i + 1}. ${p.furnitureName} - ${formatPrice(p.furniturePrice)}${p.discountPercentage ? ` (Giảm ${p.discountPercentage}%)` : ''}`
-        ).join('\n');
+        const productList = furnitures.map((p, i) => {
+          const discountPrice = p.discountPercentage 
+            ? calculateDiscountPrice(p.furniturePrice, p.discountPercentage)
+            : p.furniturePrice;
+          const priceText = p.discountPercentage
+            ? `${formatPrice(discountPrice)} ~(Giảm ${p.discountPercentage}%)~`
+            : formatPrice(p.furniturePrice);
+          
+          let stockText = '';
+          if (p.quantity !== undefined) {
+            stockText = p.quantity > 0 ? '✅ Còn hàng' : '❌ Hết hàng';
+          }
+          
+          return `${i + 1}. *${p.furnitureName}*\n   💰 ${priceText}\n   ${stockText}`;
+        }).join('\n\n');
         
         // Save to context for follow-up questions
         setContext(userId, { 
           lastIntent: 'productSearch', 
           lastProducts: furnitures.map(p => p.id),
-          lastSearch: searchQuery 
+          lastSearch: searchQuery,
+          lastCategory: matchedCategory,
         });
         
+        const categoryText = matchedCategory ? `*${matchedCategory}*` : 'sản phẩm nổi bật';
+        
         return {
-          text: `Đây là ${matchedKeyword ? `sản phẩm ${matchedKeyword}` : 'một số sản phẩm nổi bật'}:\n\n${productList}\n\nBạn có thể xem chi tiết trong mục Sản phẩm của ứng dụng.`,
+          text: `🛋️ Đây là các ${categoryText} cho bạn:\n\n${productList}\n\n💡 Xem chi tiết và hình ảnh trong mục *Sản phẩm* của ứng dụng.\n\nBạn muốn biết thêm về sản phẩm nào?`,
           suggestions: [
-            'Xem sản phẩm bán chạy',
+            'Xem chi tiết',
+            'So sánh sản phẩm',
             'Sản phẩm giảm giá',
-            'Thêm vào giỏ hàng',
+            'Thêm vào giỏ',
           ],
           actionType: 'viewProducts',
         };
       }
+      
+      // No products found - provide helpful alternatives
       return {
-        text: 'Hiện tại chưa có sản phẩm nào phù hợp. Vui lòng thử từ khóa khác!',
-        suggestions: ['Xem tất cả sản phẩm', 'Liên hệ hỗ trợ'],
+        text: `🔍 Không tìm thấy sản phẩm "${message}"\n\n` +
+          'Bạn có thể thử:\n' +
+          '• Tìm theo danh mục: ghế, bàn, sofa, tủ, giường, kệ\n' +
+          '• Xem sản phẩm bán chạy\n' +
+          '• Xem sản phẩm giảm giá\n\n' +
+          'Hoặc liên hệ admin để được tư vấn chi tiết!',
+        suggestions: ['Sản phẩm bán chạy', 'Giảm giá', 'Chat admin'],
       };
 
     case 'productStock':
@@ -659,9 +748,15 @@ const handleIntent = async (intent, message, userId, userData) => {
     case 'bestSeller':
       const bestSellers = await getBestSellingFurnitures(5);
       if (bestSellers.length > 0) {
-        const bestSellerList = bestSellers.map((p, i) => 
-          `${i + 1}. ${p.furnitureName} - ${formatPrice(p.furniturePrice)}`
-        ).join('\n');
+        const bestSellerList = bestSellers.map((p, i) => {
+          const discountPrice = p.discountPercentage 
+            ? calculateDiscountPrice(p.furniturePrice, p.discountPercentage)
+            : p.furniturePrice;
+          const priceText = p.discountPercentage
+            ? `${formatPrice(discountPrice)} (Giảm ${p.discountPercentage}%)`
+            : formatPrice(p.furniturePrice);
+          return `${i + 1}. ${p.furnitureName}\n   💰 ${priceText}\n   ⭐ Đánh giá: ${p.rating || 'Chưa có'}`;
+        }).join('\n\n');
         
         setContext(userId, { 
           lastIntent: 'bestSeller', 
@@ -669,13 +764,338 @@ const handleIntent = async (intent, message, userId, userData) => {
         });
         
         return {
-          text: `⭐ Top sản phẩm bán chạy:\n\n${bestSellerList}\n\nĐây là những sản phẩm được khách hàng yêu thích nhất!`,
-          suggestions: ['Xem chi tiết', 'Thêm vào giỏ hàng'],
+          text: `⭐ Top sản phẩm bán chạy nhất:\n\n${bestSellerList}\n\n🔥 Đây là những sản phẩm được khách hàng yêu thích và mua nhiều nhất!\n\nBạn muốn xem chi tiết sản phẩm nào?`,
+          suggestions: ['Xem chi tiết', 'Thêm vào giỏ hàng', 'So sánh giá'],
         };
       }
       return {
-        text: 'Danh sách sản phẩm bán chạy đang được cập nhật.',
-        suggestions: ['Xem tất cả sản phẩm'],
+        text: 'Danh sách sản phẩm bán chạy đang được cập nhật. Bạn có thể xem tất cả sản phẩm!',
+        suggestions: ['Xem tất cả sản phẩm', 'Sản phẩm giảm giá'],
+      };
+
+    case 'productCompare':
+      return {
+        text: '🔍 So sánh sản phẩm:\n\n' +
+          'Để so sánh chi tiết các sản phẩm, bạn có thể:\n\n' +
+          '1️⃣ Xem thông tin chi tiết từng sản phẩm trong app\n' +
+          '2️⃣ So sánh về:\n' +
+          '   • Giá cả và khuyến mãi\n' +
+          '   • Chất liệu (gỗ tự nhiên, công nghiệp, kim loại...)\n' +
+          '   • Kích thước phù hợp không gian\n' +
+          '   • Đánh giá từ khách hàng\n' +
+          '   • Phong cách (hiện đại, cổ điển, tối giản...)\n\n' +
+          '💡 Mẹo: Sản phẩm có nhiều đánh giá 5⭐ thường chất lượng tốt!\n\n' +
+          'Bạn đang quan tâm so sánh loại sản phẩm nào?',
+        suggestions: ['Ghế sofa', 'Bàn làm việc', 'Giường ngủ', 'Tủ quần áo'],
+      };
+
+    case 'productRecommend':
+      // Smart recommendations based on user preferences
+      const topProducts = await getTopFurnitures(3);
+      const discountedProducts = await getDiscountedFurnitures(2);
+      
+      let recommendText = '💡 Gợi ý sản phẩm dành cho bạn:\n\n';
+      
+      if (topProducts.length > 0) {
+        recommendText += '🌟 Được yêu thích nhất:\n';
+        topProducts.forEach((p, i) => {
+          recommendText += `${i + 1}. ${p.furnitureName} - ${formatPrice(p.furniturePrice)}\n`;
+        });
+      }
+      
+      if (discountedProducts.length > 0) {
+        recommendText += '\n🔥 Đang giảm giá:\n';
+        discountedProducts.forEach((p, i) => {
+          const salePrice = calculateDiscountPrice(p.furniturePrice, p.discountPercentage);
+          recommendText += `${i + 1}. ${p.furnitureName} - ${formatPrice(salePrice)} (Giảm ${p.discountPercentage}%)\n`;
+        });
+      }
+      
+      recommendText += '\n✨ Để tư vấn chính xác hơn, bạn có thể cho tôi biết:\n' +
+        '• Sản phẩm cho phòng nào? (khách, ngủ, làm việc...)\n' +
+        '• Phong cách yêu thích? (hiện đại, cổ điển, tối giản...)\n' +
+        '• Ngân sách dự kiến?';
+      
+      return {
+        text: recommendText,
+        suggestions: ['Phòng khách', 'Phòng ngủ', 'Phòng làm việc', 'Xem tất cả'],
+      };
+
+    case 'productMaterial':
+      return {
+        text: '🪵 Thông tin chất liệu nội thất:\n\n' +
+          '1️⃣ GỖ TỰ NHIÊN:\n' +
+          '   ✅ Sang trọng, bền đẹp\n' +
+          '   ✅ Thân thiện môi trường\n' +
+          '   ⚠️ Giá cao, cần bảo dưỡng\n\n' +
+          '2️⃣ GỖ CÔNG NGHIỆP:\n' +
+          '   ✅ Giá phải chăng\n' +
+          '   ✅ Đa dạng màu sắc\n' +
+          '   ⚠️ Kém bền hơn gỗ tự nhiên\n\n' +
+          '3️⃣ KIM LOẠI:\n' +
+          '   ✅ Chắc chắn, hiện đại\n' +
+          '   ✅ Dễ vệ sinh\n' +
+          '   ⚠️ Nặng, dễ trầy\n\n' +
+          '4️⃣ DA/VẢI:\n' +
+          '   ✅ Mềm mại, thoải mái\n' +
+          '   ✅ Phù hợp ghế sofa\n' +
+          '   ⚠️ Cần vệ sinh thường xuyên\n\n' +
+          'Bạn quan tâm chất liệu nào?',
+        suggestions: ['Gỗ tự nhiên', 'Gỗ công nghiệp', 'Kim loại', 'Xem sản phẩm'],
+      };
+
+    case 'productSize':
+      return {
+        text: '📏 Hướng dẫn chọn kích thước:\n\n' +
+          '🛋️ GHẾ SOFA:\n' +
+          '• 1-2 người: 150-180cm\n' +
+          '• 3 người: 200-220cm\n' +
+          '• Góc L: 250-300cm\n\n' +
+          '🪑 BÀN LÀM VIỆC:\n' +
+          '• Nhỏ: 100x60cm\n' +
+          '• Trung bình: 120x60cm\n' +
+          '• Lớn: 140-160x70cm\n\n' +
+          '🛏️ GIƯỜNG NGỦ:\n' +
+          '• Đơn: 100x200cm\n' +
+          '• Đôi: 160x200cm\n' +
+          '• King: 180x200cm\n\n' +
+          '💡 Mẹo: Đo kích thước phòng trước khi mua!\n\n' +
+          'Bạn cần tư vấn kích thước cho sản phẩm nào?',
+        suggestions: ['Ghế sofa', 'Bàn làm việc', 'Giường ngủ', 'Tủ quần áo'],
+      };
+
+    case 'productColor':
+      return {
+        text: '🎨 Tư vấn màu sắc nội thất:\n\n' +
+          '⚪ MÀU TRẮNG/XÁM:\n' +
+          '• Phong cách: Hiện đại, tối giản\n' +
+          '• Phù hợp: Mọi không gian\n' +
+          '• Ưu điểm: Thoáng, rộng rãi\n\n' +
+          '🟤 MÀU NÂU/GỖ:\n' +
+          '• Phong cách: Ấm cúng, cổ điển\n' +
+          '• Phù hợp: Phòng khách, phòng ngủ\n' +
+          '• Ưu điểm: Sang trọng, dễ phối\n\n' +
+          '⚫ MÀU ĐEN:\n' +
+          '• Phong cách: Hiện đại, công nghiệp\n' +
+          '• Phù hợp: Văn phòng, phòng làm việc\n' +
+          '• Ưu điểm: Lịch lãm, ít bẩn\n\n' +
+          '🎨 Các sản phẩm của chúng tôi có đa dạng màu sắc. Xem chi tiết trong mục Sản phẩm!\n\n' +
+          'Bạn thích màu nào?',
+        suggestions: ['Trắng/Xám', 'Nâu/Gỗ', 'Đen', 'Xem sản phẩm'],
+      };
+
+    case 'productStyle':
+      return {
+        text: '✨ Các phong cách nội thất:\n\n' +
+          '1️⃣ HIỆN ĐẠI (Modern):\n' +
+          '• Đường nét đơn giản, gọn gàng\n' +
+          '• Màu trung tính: trắng, xám, đen\n' +
+          '• Chất liệu: kim loại, kính\n\n' +
+          '2️⃣ CỔ ĐIỂN (Classic):\n' +
+          '• Họa tiết tinh xảo, tỉ mỉ\n' +
+          '• Màu ấm: nâu, vàng đồng\n' +
+          '• Chất liệu: gỗ tự nhiên\n\n' +
+          '3️⃣ TỐI GIẢN (Minimalist):\n' +
+          '• Tối giản, tiện dụng\n' +
+          '• Màu đơn sắc\n' +
+          '• "Less is more"\n\n' +
+          '4️⃣ BẮC ÂU (Scandinavian):\n' +
+          '• Ấm cúng, thoải mái\n' +
+          '• Màu sáng, gỗ sáng\n' +
+          '• Gần gũi thiên nhiên\n\n' +
+          'Bạn yêu thích phong cách nào?',
+        suggestions: ['Hiện đại', 'Cổ điển', 'Tối giản', 'Bắc Âu'],
+      };
+
+    case 'productRoom':
+      return {
+        text: '🏠 Tư vấn nội thất theo phòng:\n\n' +
+          '🛋️ PHÒNG KHÁCH:\n' +
+          '• Sofa, bàn trà, kệ tivi\n' +
+          '• Trọng tâm: thoải mái, sang trọng\n\n' +
+          '🛏️ PHÒNG NGỦ:\n' +
+          '• Giường, tủ quần áo, bàn trang điểm\n' +
+          '• Trọng tâm: thư giãn, riêng tư\n\n' +
+          '💼 PHÒNG LÀM VIỆC:\n' +
+          '• Bàn làm việc, ghế ergonomic, kệ sách\n' +
+          '• Trọng tâm: tập trung, năng suất\n\n' +
+          '🍽️ PHÒNG BẾP/ĂN:\n' +
+          '• Bàn ăn, ghế ăn, tủ bếp\n' +
+          '• Trọng tâm: tiện nghi, sum họp\n\n' +
+          'Bạn đang tìm nội thất cho phòng nào?',
+        suggestions: ['Phòng khách', 'Phòng ngủ', 'Phòng làm việc', 'Phòng bếp'],
+      };
+
+    case 'productBudget':
+      return {
+        text: '💰 Tư vấn theo ngân sách:\n\n' +
+          '💸 DƯỚI 5 TRIỆU:\n' +
+          '• Ghế làm việc, kệ sách nhỏ\n' +
+          '• Bàn học, tủ đầu giường\n' +
+          '• Chất liệu: gỗ công nghiệp\n\n' +
+          '💵 5-10 TRIỆU:\n' +
+          '• Bàn làm việc, ghế sofa nhỏ\n' +
+          '• Tủ quần áo 2 cánh\n' +
+          '• Chất liệu: gỗ công nghiệp cao cấp\n\n' +
+          '💴 10-20 TRIỆU:\n' +
+          '• Sofa 3 chỗ, bàn ăn 4-6 người\n' +
+          '• Giường ngủ + tủ quần áo\n' +
+          '• Chất liệu: gỗ tự nhiên, da\n\n' +
+          '💎 TRÊN 20 TRIỆU:\n' +
+          '• Bộ sofa cao cấp, giường tủ sang trọng\n' +
+          '• Chất liệu: gỗ tự nhiên, da thật\n\n' +
+          'Ngân sách của bạn khoảng bao nhiêu?',
+        suggestions: ['Dưới 5 triệu', '5-10 triệu', '10-20 triệu', 'Trên 20 triệu'],
+      };
+
+    case 'productCombo':
+      return {
+        text: '🎁 Bộ sản phẩm combo:\n\n' +
+          '✅ Mua combo tiết kiệm hơn 10-15%!\n\n' +
+          '📦 COMBO PHỔ BIẾN:\n' +
+          '• Bộ phòng khách: Sofa + Bàn trà\n' +
+          '• Bộ phòng ngủ: Giường + Tủ + Bàn trang điểm\n' +
+          '• Bộ làm việc: Bàn + Ghế + Kệ sách\n' +
+          '• Bộ bàn ăn: Bàn + 4-6 ghế\n\n' +
+          '🎯 ƯU ĐIỂM:\n' +
+          '• Giá ưu đãi\n' +
+          '• Phong cách thống nhất\n' +
+          '• Giao hàng cùng lúc\n\n' +
+          'Bạn quan tâm bộ nào?',
+        suggestions: ['Bộ phòng khách', 'Bộ phòng ngủ', 'Bộ làm việc', 'Xem tất cả'],
+      };
+
+    case 'shippingFee':
+      return {
+        text: '💰 Phí vận chuyển:\n\n' +
+          '🎁 MIỄN PHÍ SHIP:\n' +
+          '• Đơn hàng từ 500.000đ trở lên\n' +
+          '• Áp dụng toàn quốc\n\n' +
+          '🚚 PHÍ VẬN CHUYỂN:\n' +
+          '• Dưới 500k: 30.000-50.000đ\n' +
+          '• Tùy khoảng cách và kích thước\n\n' +
+          '📍 ƯỚC TÍNH TỰ ĐỘNG:\n' +
+          'Phí ship sẽ được tính khi bạn:\n' +
+          '• Thêm sản phẩm vào giỏ\n' +
+          '• Nhập địa chỉ giao hàng\n' +
+          '• Xem tổng tiền trước khi thanh toán\n\n' +
+          '💡 Mẹo: Mua từ 500k để FREE SHIP!',
+        suggestions: ['Xem giỏ hàng', 'Tiếp tục mua', 'Tìm sản phẩm'],
+      };
+
+    case 'shippingTime':
+      return {
+        text: '⏰ Thời gian giao hàng:\n\n' +
+          '🏃 NHANH (1-2 ngày):\n' +
+          '• Nội thành TP.HCM\n' +
+          '• Sản phẩm có sẵn kho\n\n' +
+          '🚗 TRUNG BÌNH (2-4 ngày):\n' +
+          '• Ngoại thành, các tỉnh lân cận\n' +
+          '• Miền Nam\n\n' +
+          '🚚 TIÊU CHUẨN (3-7 ngày):\n' +
+          '• Miền Trung, Miền Bắc\n' +
+          '• Vùng xa\n\n' +
+          '📦 Bạn có thể theo dõi đơn hàng realtime trong app!\n\n' +
+          '⚡ Lưu ý: Sản phẩm đặt trước có thể mất 7-14 ngày.',
+        suggestions: ['Kiểm tra đơn hàng', 'Đặt hàng ngay', 'Liên hệ hỗ trợ'],
+      };
+
+    case 'orderDelivery':
+      return {
+        text: '🚚 Thông tin giao hàng:\n\n' +
+          '📍 QUY TRÌNH:\n' +
+          '1️⃣ Xác nhận đơn hàng (1-2 giờ)\n' +
+          '2️⃣ Đóng gói và xuất kho\n' +
+          '3️⃣ Vận chuyển đến bạn\n' +
+          '4️⃣ Giao hàng + lắp đặt (nếu cần)\n\n' +
+          '⏱️ THỜI GIAN:\n' +
+          '• Nội thành: 1-2 ngày\n' +
+          '• Ngoại thành: 2-4 ngày\n' +
+          '• Tỉnh khác: 3-7 ngày\n\n' +
+          '💰 PHÍ SHIP:\n' +
+          '• FREE với đơn > 500.000đ\n' +
+          '• 30.000-150.000đ tùy khu vực\n\n' +
+          'Kiểm tra đơn hàng trong mục "Đơn hàng"!',
+        suggestions: ['Kiểm tra đơn hàng', 'Tính phí ship', 'Liên hệ hỗ trợ'],
+      };
+
+    case 'storeHours':
+      return {
+        text: '🕐 Giờ làm việc:\n\n' +
+          '📍 CỬA HÀNG:\n' +
+          '• Thứ 2 - Thứ 7: 8:00 - 21:00\n' +
+          '• Chủ nhật: 9:00 - 20:00\n' +
+          '• Lễ Tết: 9:00 - 18:00\n\n' +
+          '💬 HỖ TRỢ ONLINE:\n' +
+          '• Chatbot AI: 24/7 (luôn sẵn sàng!)\n' +
+          '• Tư vấn viên: 8:00 - 21:00\n\n' +
+          '📞 HOTLINE:\n' +
+          '• 0356 057 547\n' +
+          '• Hoạt động: 8:00 - 21:00\n\n' +
+          '📱 MUA SẮM ONLINE:\n' +
+          'Đặt hàng 24/7 qua app!\n\n' +
+          'Bạn muốn ghé thăm cửa hàng hay mua online?',
+        suggestions: ['Liên hệ cửa hàng', 'Mua online', 'Chat admin'],
+      };
+
+    case 'storeLocation':
+      return {
+        text: '📍 Liên hệ cửa hàng:\n\n' +
+          '🏢 FURNITURE STORE\n' +
+          '☎️ Hotline: 0356 057 547 (8:00-21:00 hàng ngày)\n' +
+          '📧 Email: support@furniturestore.com\n\n' +
+          '🕐 GIỜ MỞ CỬA:\n' +
+          '• T2-T7: 8:00 - 21:00\n' +
+          '• CN: 9:00 - 20:00\n\n' +
+          '📍 CHI NHÁNH:\n' +
+          'Hệ thống cửa hàng trên toàn quốc\n\n' +
+          '📱 MUA SẮM ONLINE:\n' +
+          'Giao hàng tận nơi toàn quốc\n' +
+          'Thanh toán linh hoạt, đa dạng\n\n' +
+          'Bạn muốn mua online hay ghé thăm cửa hàng?',
+        suggestions: ['Mua online', 'Chat với admin', 'Gọi hotline'],
+      };
+
+    case 'installation':
+      return {
+        text: '🔧 Dịch vụ lắp đặt:\n\n' +
+          '✅ MIỄN PHÍ LẮP ĐẶT:\n' +
+          '• Đơn hàng từ 500.000đ\n' +
+          '• Sản phẩm: giường, tủ, bàn lớn\n' +
+          '• Áp dụng toàn quốc\n\n' +
+          '💰 PHÍ LẮP ĐẶT:\n' +
+          '• Sản phẩm nhỏ: 100.000-200.000đ\n' +
+          '• Sản phẩm lớn: 200.000-500.000đ\n' +
+          '• Khu vực xa: Phụ thu 50.000đ\n\n' +
+          '📋 QUY TRÌNH:\n' +
+          '1️⃣ Thợ giao hàng + lắp đặt\n' +
+          '2️⃣ Kiểm tra sản phẩm\n' +
+          '3️⃣ Lắp ráp theo hướng dẫn\n' +
+          '4️⃣ Dọn dẹp, vệ sinh\n\n' +
+          '💡 Hướng dẫn lắp đặt có kèm theo sản phẩm!',
+        suggestions: ['Xem hướng dẫn', 'Đặt lịch lắp đặt', 'Liên hệ hỗ trợ'],
+      };
+
+    case 'maintenance':
+      return {
+        text: '🧹 Hướng dẫn bảo quản nội thất:\n\n' +
+          '🪵 GỖ TỰ NHIÊN:\n' +
+          '• Lau bằng khăn ẩm, tránh nước trực tiếp\n' +
+          '• Đánh vecni 6 tháng/lần\n' +
+          '• Tránh ánh nắng trực tiếp\n\n' +
+          '🛋️ SOFA DA/VẢI:\n' +
+          '• Hút bụi hàng tuần\n' +
+          '• Vệ sinh vết bẩn ngay\n' +
+          '• Dùng sản phẩm chuyên dụng\n\n' +
+          '⚙️ KIM LOẠI:\n' +
+          '• Lau khô để tránh gỉ\n' +
+          '• Dùng dung dịch tẩy gỉ nếu cần\n\n' +
+          '❄️ MẸO CHUNG:\n' +
+          '• Tránh ẩm ướt\n' +
+          '• Vệ sinh định kỳ\n' +
+          '• Bảo quản trong môi trường khô ráo\n\n' +
+          '📞 Cần hỗ trợ? Liên hệ: 0356 057 547',
+        suggestions: ['Mua sản phẩm bảo quản', 'Liên hệ hỗ trợ', 'Xem video HD'],
       };
 
     case 'orderStatus':
@@ -887,15 +1307,22 @@ const handleIntent = async (intent, message, userId, userData) => {
     case 'warranty':
       return {
         text: '🛡️ Chính sách bảo hành:\n\n' +
-          '✅ Bảo hành 12-24 tháng tùy sản phẩm\n' +
-          '✅ Bảo hành các lỗi do nhà sản xuất\n' +
-          '✅ Hỗ trợ sửa chữa, thay thế linh kiện\n\n' +
-          'Không bảo hành:\n' +
-          '❌ Lỗi do người dùng\n' +
-          '❌ Hư hỏng do thiên tai\n' +
-          '❌ Sản phẩm đã qua sửa chữa ở nơi khác\n\n' +
-          'Liên hệ hỗ trợ để được tư vấn chi tiết!',
-        suggestions: ['Liên hệ hỗ trợ', 'Xem chính sách chi tiết'],
+          '✅ THỜI GIAN BẢO HÀNH:\n' +
+          '• Nội thất gỗ: 12-24 tháng\n' +
+          '• Kim loại, nhựa: 12 tháng\n' +
+          '• Đệm, nệm: 6-12 tháng\n' +
+          '• Phụ kiện: 3-6 tháng\n\n' +
+          '✅ ĐƯỢC BẢO HÀNH:\n' +
+          '• Lỗi sản xuất, vật liệu\n' +
+          '• Hư hỏng trong quá trình vận chuyển\n' +
+          '• Bảo trì, thay thế linh kiện\n\n' +
+          '❌ KHÔNG BẢO HÀNH:\n' +
+          '• Hư hỏng do người dùng\n' +
+          '• Thiên tai, hỏa hoạn\n' +
+          '• Đã sửa chữa ở nơi khác\n' +
+          '• Hết thời gian bảo hành\n\n' +
+          '📞 Yêu cầu bảo hành: Chat admin hoặc hotline!',
+        suggestions: ['Liên hệ bảo hành', 'Xem chính sách', 'Chat admin'],
       };
 
     case 'returnPolicy':
@@ -916,14 +1343,21 @@ const handleIntent = async (intent, message, userId, userData) => {
     case 'contact':
       return {
         text: '📞 Liên hệ hỗ trợ:\n\n' +
-          '🏢 Furniture Store\n' +
-          '📍 Địa chỉ: 123 Nguyễn Văn Linh, Q.7, TP.HCM\n' +
-          '☎️ Hotline: 1900 xxxx\n' +
-          '📧 Email: support@furniturestore.com\n' +
-          '⏰ Giờ làm việc: 8:00 - 22:00 (Hàng ngày)\n\n' +
-          'Hoặc chat trực tiếp với tôi, tôi sẽ chuyển cho admin nếu cần hỗ trợ chuyên sâu!',
+          '🏢 Furniture Store - Nội thất cao cấp\n\n' +
+          '📱 LIÊN HỆ TRỰC TIẾP:\n' +
+          '• Hotline: 0356 057 547 (8:00-21:00)\n' +
+          '• Email: support@furniturestore.com\n' +
+          '• Chat trong app: 24/7\n\n' +
+          '💬 HỖ TRỢ NHANH:\n' +
+          '• Chat với tôi (AI): 24/7\n' +
+          '• Tư vấn viên: 8:00-21:00\n\n' +
+          '🕐 THỜI GIAN:\n' +
+          '• Thứ 2-7: 8:00 - 21:00\n' +
+          '• Chủ nhật: 9:00 - 20:00\n\n' +
+          'Bạn cần hỗ trợ về vấn đề gì?',
         suggestions: [
-          'Chat với admin',
+          'Chat ngay',
+          'Gọi hotline',
           'Gửi email',
         ],
       };
@@ -1004,9 +1438,16 @@ const handleIntent = async (intent, message, userId, userData) => {
       };
 
     default:
+      // Polite and encouraging response for unhandled cases
       return {
-        text: 'Tôi chưa hiểu rõ yêu cầu của bạn. Bạn có thể nói rõ hơn không?',
-        suggestions: ['Trợ giúp', 'Liên hệ admin'],
+        text: '😊 Cảm ơn bạn đã hỏi! Tôi đang cố gắng hiểu yêu cầu của bạn...\n\n' +
+          'Bạn có thể diễn đạt cụ thể hơn được không? \n\n' +
+          'Ví dụ:\n' +
+          '• "Tìm bàn làm việc giá rẻ"\n' +
+          '• "Kiểm tra đơn hàng"\n' +
+          '• "Cách thanh toán"\n\n' +
+          'Hoặc chat với admin để được hỗ trợ ngay! 👍',
+        suggestions: ['Xem sản phẩm', 'Kiểm tra đơn hàng', 'Chat admin', 'Trợ giúp'],
       };
   }
 };

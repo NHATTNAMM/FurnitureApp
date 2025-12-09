@@ -20,11 +20,19 @@ const ProfileDetail = () => {
     const [phone, setPhone] = useState(user?.phone || '');
     const [avatar, setAvatar] = useState(user?.avatar || '');
     const [address, setAddress] = useState(user?.address || '');
-    const [city, setCity] = useState('');
-    const [district, setDistrict] = useState('');
-    const [ward, setWard] = useState('');
     const [modalVisible, setModalVisible] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [isGettingLocation, setIsGettingLocation] = useState(false);
+
+    // Cập nhật local state khi user context thay đổi
+    React.useEffect(() => {
+        if (user) {
+            setFullName(user.fullName || '');
+            setPhone(user.phone || '');
+            setAvatar(user.avatar || '');
+            setAddress(user.address || '');
+        }
+    }, [user]);
 
     const CLOUD_NAME = 'dleidkd6p';
     const UPLOAD_PRESET = 'interiorapp';
@@ -68,6 +76,76 @@ const ProfileDetail = () => {
     }
 
     const navigation = useNavigation();
+    
+    const getCurrentLocation = async () => {
+        try {
+            setIsGettingLocation(true);
+            
+            // Yêu cầu quyền truy cập vị trí
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('Thông báo', 'Bạn cần cấp quyền truy cập vị trí để sử dụng tính năng này.');
+                setIsGettingLocation(false);
+                return;
+            }
+
+            // Lấy vị trí hiện tại
+            const location = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.High,
+            });
+
+            const { latitude, longitude } = location.coords;
+
+            // Chuyển đổi tọa độ thành địa chỉ
+            const addressData = await Location.reverseGeocodeAsync({
+                latitude,
+                longitude,
+            });
+
+            if (addressData && addressData.length > 0) {
+                const addr = addressData[0];
+                const fullAddress = [
+                    addr.name,
+                    addr.street,
+                    addr.district,
+                    addr.subregion,
+                    addr.city,
+                    addr.region,
+                    addr.country
+                ].filter(Boolean).join(', ');
+                
+                setAddress(fullAddress);
+                Alert.alert('Thành công', 'Đã lấy địa chỉ từ vị trí hiện tại của bạn.');
+            }
+        } catch (error) {
+            console.error('Lỗi lấy vị trí:', error);
+            Alert.alert('Lỗi', 'Không thể lấy vị trí hiện tại. Vui lòng thử lại.');
+        } finally {
+            setIsGettingLocation(false);
+        }
+    };
+
+    const openGoogleMaps = () => {
+        const url = Platform.select({
+            ios: 'maps://app',
+            android: 'geo:0,0?q='
+        });
+        
+        Alert.alert(
+            'Chọn địa chỉ trên bản đồ',
+            'Bạn sẽ được chuyển đến Google Maps để chọn địa chỉ chính xác. Sau khi chọn xong, hãy sao chép địa chỉ và quay lại đây để dán vào.',
+            [
+                { text: 'Hủy', style: 'cancel' },
+                {
+                    text: 'Mở Google Maps',
+                    onPress: () => {
+                        Linking.openURL('https://www.google.com/maps');
+                    }
+                }
+            ]
+        );
+    };
+    
     const handleUpdate = async (avatarUrl = user.avatar) => {
         if (!user) {
             Alert.alert("Lỗi", "Không tìm thấy thông tin người dùng.");
@@ -78,9 +156,6 @@ const ProfileDetail = () => {
             fullName: fullName,
             phone: phone,
             address: address,
-            city: city,
-            district: district,
-            ward: ward,
         });
         if (result.success) {
             Alert.alert("Thành công", "Thông tin đã được cập nhật.");
@@ -134,10 +209,47 @@ const ProfileDetail = () => {
                                     <View style={styles.editDetail}>
                                         <ProfileInput label="Họ và tên" value={fullName} onChangeText={setFullName} />
                                         <ProfileInput label="Số điện thoại" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-                                        <ProfileInput label="Địa chỉ" value={address} onChangeText={setAddress} />
-                                        <ProfileInput label="Thành phố" value={city} onChangeText={setCity} />
-                                        <ProfileInput label="Quận/Huyện" value={district} onChangeText={setDistrict} />
-                                        <ProfileInput label="Phường/Xã" value={ward} onChangeText={setWard} />
+                                        
+                                        {/* Địa chỉ với các nút bổ trợ */}
+                                        <View style={styles.itemUser}>
+                                            <View style={styles.addressHeader}>
+                                                <Text style={styles.textOnInput}>Địa chỉ giao hàng</Text>
+                                                <View style={styles.addressActions}>
+                                                    <TouchableOpacity 
+                                                        style={styles.addressActionButton}
+                                                        onPress={getCurrentLocation}
+                                                        disabled={isGettingLocation}
+                                                    >
+                                                        {isGettingLocation ? (
+                                                            <MaterialIcons name="hourglass-empty" size={16} color={PRIMARY} />
+                                                        ) : (
+                                                            <MaterialIcons name="my-location" size={16} color={PRIMARY} />
+                                                        )}
+                                                        <Text style={styles.addressActionText}>
+                                                            {isGettingLocation ? 'Đang lấy...' : 'Vị trí hiện tại'}
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                    
+                                                    <TouchableOpacity 
+                                                        style={styles.addressActionButton}
+                                                        onPress={openGoogleMaps}
+                                                    >
+                                                        <MaterialIcons name="map" size={16} color={PRIMARY} />
+                                                        <Text style={styles.addressActionText}>Chọn trên bản đồ</Text>
+                                                    </TouchableOpacity>
+                                                </View>
+                                            </View>
+                                            <TextInput
+                                                style={[styles.textInput, styles.addressInput]}
+                                                value={address}
+                                                onChangeText={setAddress}
+                                                placeholder="Nhập địa chỉ đầy đủ của bạn..."
+                                                placeholderTextColor="#9CA3AF"
+                                                multiline
+                                                numberOfLines={4}
+                                                textAlignVertical="top"
+                                            />
+                                        </View>
                                     </View>
                                 </View>
                             </View>
@@ -281,6 +393,34 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         borderColor: '#E5E7EB',
         backgroundColor: '#fff',
+    },
+    addressHeader: {
+        marginBottom: 8,
+    },
+    addressActions: {
+        flexDirection: 'row',
+        gap: 8,
+        marginTop: 6,
+    },
+    addressActionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F0F4FF',
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: PRIMARY,
+        gap: 4,
+    },
+    addressActionText: {
+        color: PRIMARY,
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    addressInput: {
+        minHeight: 100,
+        paddingTop: 12,
     },
     footerButtons: {
         flexDirection: 'row',

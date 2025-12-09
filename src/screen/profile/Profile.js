@@ -269,13 +269,6 @@ const Profile = () => {
                                 label="Đổi mật khẩu"
                                 onPress={() => { }}
                             />
-                            {user.role !== "Admin" && (
-                                <ProfileItem
-                                    icon={<AntDesign name="deleteuser" size={24} color={PRIMARY} />}
-                                    label="Yêu cầu xóa tài khoản"
-                                    onPress={() => { }}
-                                />
-                            )}
                             {user.role !== "user" && (
                                 <ProfileItem
                                     icon={<MaterialIcons name="admin-panel-settings" size={24} color={PRIMARY} />}
