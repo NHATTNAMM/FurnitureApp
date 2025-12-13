@@ -21,7 +21,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { MaterialIcons, Feather, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import Style from '../globals/style';
 import TagComponent from '../component/TagComponent';
-import { addToCart, loadFurnitureHome, removeFavoritesFurniture } from '../Firebase/FirebaseAPI';
+import { addToCart, loadFurnitureHome, removeFavoritesFurniture, loadCartRealTime } from '../Firebase/FirebaseAPI';
 import Loading from '../component/Loading';
 import FurnitureItem from './FurnitureItem';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
@@ -186,6 +186,16 @@ const HomeScreen = () => {
       })
       return () => un();
     },[navigation])
+
+    // Load giỏ hàng real-time
+    useEffect(() => {
+      if (userId) {
+        const unsubscribe = loadCartRealTime(userId, setCartItems);
+        return () => {
+          if (unsubscribe) unsubscribe();
+        };
+      }
+    }, [userId]);
 
     const headerHeight = scrollY.interpolate({
       inputRange: [0, 100],

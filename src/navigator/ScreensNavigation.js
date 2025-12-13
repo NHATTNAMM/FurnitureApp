@@ -32,6 +32,7 @@ import SearchScreen from '../screen/SearchScreen';
 import MyReviewsScreen from '../screen/MyReviewsScreen';
 import AdminChatScreen from '../admin_app/AdminChatScreen';
 import OrderDetailScreen from '../screen/Orders/OrderDetailScreen';
+import ProductStatisticsTableScreen from '../admin_app/ProductStatisticsTableScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -79,6 +80,11 @@ const ScreensNavigation = () => {
         <Stack.Screen 
           name="AdminChat" 
           component={AdminChatScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="ProductStatisticsTableScreen" 
+          component={ProductStatisticsTableScreen}
           options={{ headerShown: false }}
         />
       </Stack.Navigator>

@@ -18,7 +18,7 @@ import GlassDiscountBadge from '../component/GlassDiscountBadge';
 
 const screenWidth = Dimensions.get('window').width;
 
-const ProductStatisticsScreen = () => {
+const ProductStatisticsScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -319,10 +319,22 @@ const ProductStatisticsScreen = () => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Thống kê sản phẩm</Text>
-        <Text style={styles.headerSubtitle}>
-          Tổng: {products.length} sản phẩm
-        </Text>
+        <View style={styles.headerContent}>
+          <View>
+            <Text style={styles.headerTitle}>Thống kê sản phẩm</Text>
+            <Text style={styles.headerSubtitle}>
+              Tổng: {products.length} sản phẩm
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.tableIconButton}
+            onPress={() => navigation.navigate('ProductStatisticsTableScreen')}
+            activeOpacity={0.7}
+          >
+            <MaterialCommunityIcons name="table-large" size={28} color="#000d66" />
+            <Text style={styles.tableIconText}>Xem bảng</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Sort Buttons */}
@@ -479,6 +491,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
   },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
@@ -488,6 +505,21 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: 14,
     color: '#666',
+  },
+  tableIconButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 8,
+    borderRadius: 12,
+    backgroundColor: '#e0e7ff',
+    borderWidth: 1,
+    borderColor: '#000d66',
+  },
+  tableIconText: {
+    fontSize: 10,
+    color: '#000d66',
+    fontWeight: '600',
+    marginTop: 2,
   },
   sortContainer: {
     backgroundColor: '#fff',

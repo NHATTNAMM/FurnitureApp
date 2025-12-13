@@ -137,7 +137,7 @@ const AdminScreen = ({ route }) => {
                         case '7':
                             return null;
                         case '8':
-                            return <ProductStatisticsScreen/>
+                            return <ProductStatisticsScreen navigation={navigation} />
                         default:
                             return null;
                     }

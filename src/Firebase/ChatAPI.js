@@ -972,7 +972,7 @@ const handleIntent = async (intent, message, userId, userData) => {
           '• Đơn hàng từ 500.000đ trở lên\n' +
           '• Áp dụng toàn quốc\n\n' +
           '🚚 PHÍ VẬN CHUYỂN:\n' +
-          '• Dưới 500k: 30.000-50.000đ\n' +
+          '• Dưới 500k: 30.000-80.000đ\n' +
           '• Tùy khoảng cách và kích thước\n\n' +
           '📍 ƯỚC TÍNH TỰ ĐỘNG:\n' +
           'Phí ship sẽ được tính khi bạn:\n' +
@@ -1278,8 +1278,8 @@ const handleIntent = async (intent, message, userId, userData) => {
           '• Ngoại thành: 2-4 ngày\n' +
           '• Tỉnh khác: 3-7 ngày\n\n' +
           '💰 Phí vận chuyển:\n' +
-          '• Đơn hàng > 5.000.000đ: Miễn phí\n' +
-          '• Đơn hàng < 5.000.000đ: 50.000đ\n\n' +
+          '• Đơn hàng > 500.000đ: Miễn phí\n' +
+          '• Đơn hàng < 500.000đ: <=80.000đ\n\n' +
           '📦 Bạn có thể theo dõi trạng thái đơn hàng trong mục "Đơn hàng".',
         suggestions: [
           'Kiểm tra đơn hàng',
